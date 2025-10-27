@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+type Params = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
 // PATCH: Toggle public sharing for a note
-export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
-  const { id } = context.params;
+export async function PATCH(request: NextRequest, props: Params) {
+  const params = await props.params;
+  const { id } = params;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-  const { id } = context.params;
     const body = await request.json();
     const { isPublic } = body;
 

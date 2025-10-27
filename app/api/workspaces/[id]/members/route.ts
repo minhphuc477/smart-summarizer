@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+type Params = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
 // GET: Lấy danh sách members của workspace
-export async function GET(request: NextRequest, context: { params: { id: string } }) {
-  const { id: workspaceId } = context.params;
+export async function GET(request: NextRequest, props: Params) {
+  const params = await props.params;
+  const { id: workspaceId } = params;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { id: workspaceId } = params;
 
     // Get members với user info
     const { data: members, error } = await supabase
@@ -39,15 +44,14 @@ export async function GET(request: NextRequest, context: { params: { id: string 
 }
 
 // POST: Mời member mới (by email)
-export async function POST(request: NextRequest, context: { params: { id: string } }) {
-  const { id: workspaceId } = context.params;
+export async function POST(request: NextRequest, props: Params) {
+  const params = await props.params;
+  const { id: workspaceId } = params;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { id: workspaceId } = params;
     const body = await request.json();
     const { email } = body;
 
@@ -89,15 +93,14 @@ export async function POST(request: NextRequest, context: { params: { id: string
 }
 
 // DELETE: Xóa member khỏi workspace
-export async function DELETE(request: NextRequest, context: { params: { id: string } }) {
-  const { id: workspaceId } = context.params;
+export async function DELETE(request: NextRequest, props: Params) {
+  const params = await props.params;
+  const { id: workspaceId } = params;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { id: workspaceId } = params;
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 

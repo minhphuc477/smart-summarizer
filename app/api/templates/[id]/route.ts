@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+type Params = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
 // GET: Lấy template by ID
-export async function GET(request: NextRequest, context: { params: { id: string } }) {
-  const { id } = context.params;
+export async function GET(request: NextRequest, props: Params) {
+  const params = await props.params;
+  const { id } = params;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-  const { id } = context.params;
 
     const { data: template, error } = await supabase
       .from('templates')
@@ -30,15 +35,14 @@ export async function GET(request: NextRequest, context: { params: { id: string 
 }
 
 // POST: Use template (increment usage count)
-export async function POST(request: NextRequest, context: { params: { id: string } }) {
-  const { id } = context.params;
+export async function POST(request: NextRequest, props: Params) {
+  const params = await props.params;
+  const { id } = params;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-  const { id } = context.params;
 
     // Increment usage count
     const { data: template, error } = await supabase
@@ -68,15 +72,14 @@ export async function POST(request: NextRequest, context: { params: { id: string
 }
 
 // DELETE: Xóa custom template
-export async function DELETE(request: NextRequest, context: { params: { id: string } }) {
-  const { id } = context.params;
+export async function DELETE(request: NextRequest, props: Params) {
+  const params = await props.params;
+  const { id } = params;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-  const { id } = context.params;
 
     // Delete (RLS will ensure user can only delete their own)
     const { error } = await supabase

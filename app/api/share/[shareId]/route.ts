@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+type Params = {
+  params: Promise<{
+    shareId: string;
+  }>;
+};
+
 // GET: Lấy public note by share_id (không cần auth)
-export async function GET(request: NextRequest, context: { params: { shareId: string } }) {
-  const { shareId } = context.params;
+export async function GET(request: NextRequest, props: Params) {
+  const params = await props.params;
+  const { shareId } = params;
   try {
-  const { shareId } = context.params;
 
     // Fetch public note
     const { data: note, error } = await supabase

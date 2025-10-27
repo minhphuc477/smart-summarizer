@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+type Params = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
 // GET: Lấy canvas data (nodes + edges)
-export async function GET(request: NextRequest, context: { params: { id: string } }) {
-  const { id } = context.params;
+export async function GET(request: NextRequest, props: Params) {
+  const params = await props.params;
+  const { id } = params;
   try {
     const { data: { session } } = await supabase.auth.getSession();
-  const { id } = context.params;
 
     // Get canvas
     const { data: canvas, error: canvasError } = await supabase
@@ -48,15 +54,14 @@ export async function GET(request: NextRequest, context: { params: { id: string 
 }
 
 // PATCH: Update canvas
-export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
-  const { id } = context.params;
+export async function PATCH(request: NextRequest, props: Params) {
+  const params = await props.params;
+  const { id } = params;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-  const { id } = context.params;
     const body = await request.json();
     const { title, description, nodes, edges, is_public } = body;
 
@@ -119,15 +124,14 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
 }
 
 // DELETE: Xóa canvas
-export async function DELETE(request: NextRequest, context: { params: { id: string } }) {
-  const { id } = context.params;
+export async function DELETE(request: NextRequest, props: Params) {
+  const params = await props.params;
+  const { id } = params;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-  const { id } = context.params;
 
     const { error } = await supabase
       .from('canvases')

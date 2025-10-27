@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Folder, Plus, MoreVertical, Edit2, Trash2, FolderOpen } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -15,7 +16,16 @@ import {
 
 type FolderType = {
   id: number;
+  name: string;
+  description: string | null;
+  color: string;
+  note_count: number;
+  user_id: string;
+  created_at: string;
+};
+
 type FolderSidebarProps = {
+  userId: string;
   onFolderSelect: (folderId: number | null) => void;
   selectedFolderId: number | null;
 };
@@ -219,7 +229,7 @@ export default function FolderSidebar({ userId, onFolderSelect, selectedFolderId
                     size="icon"
                     variant="ghost"
                     className="h-7 w-7"
-                    onClick={(e) => {
+                    onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();
                       openEditDialog(folder);
                     }}
@@ -230,7 +240,7 @@ export default function FolderSidebar({ userId, onFolderSelect, selectedFolderId
                     size="icon"
                     variant="ghost"
                     className="h-7 w-7 text-destructive"
-                    onClick={(e) => {
+                    onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();
                       openDeleteDialog(folder);
                     }}

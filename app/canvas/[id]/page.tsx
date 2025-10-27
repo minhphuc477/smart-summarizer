@@ -1,6 +1,12 @@
 import CanvasEditor from '@/components/CanvasEditor';
 
-export default function CanvasDetailPage({ params }: { params: { id: string } }) {
+type PageProps = {
+  params: Promise<{ id: string }>;
+};
+
+export default async function CanvasDetailPage(props: PageProps) {
+  const params = await props.params;
+  
   return (
     <div className="h-screen">
       <CanvasEditor canvasId={params.id} />

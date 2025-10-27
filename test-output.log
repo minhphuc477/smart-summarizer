@@ -1,0 +1,199 @@
+
+> smart-summarizer@0.1.0 test
+> jest --verbose
+
+PASS lib/__tests__/encryption.test.ts
+  Encryption Module
+    ✓ encrypts and decrypts text (86 ms)
+    ✓ different encryptions produce different results (74 ms)
+    ✓ hashes password consistently (3 ms)
+    ✓ validates strong password (1 ms)
+    ✓ rejects weak password (1 ms)
+
+PASS lib/__tests__/calendarLinks.test.ts
+  Calendar Links Module
+    ✓ generates all calendar links (5 ms)
+    ✓ encodes event details correctly (11 ms)
+    ✓ handles events without description (4 ms)
+    ✓ formats datetime for different services (2 ms)
+
+FAIL app/api/__tests__/folders.test.ts
+  ● Test suite failed to run
+
+    ReferenceError: Request is not defined
+
+      17 |
+      18 |     // Fetch folders with stats
+    > 19 |     const { data: folders, error } = await supabase
+         |                 ^
+      20 |       .from('folder_stats')
+      21 |       .select('*')
+      22 |       .eq('user_id', session.user.id)
+
+      at Object.Request (node_modules/next/src/server/web/spec-extension/request.ts:14:34)
+      at Object.<anonymous> (node_modules/next/server.js:2:16)
+      at Object.<anonymous> (app/api/folders/route.ts:19:17)
+      at Object.<anonymous> (app/api/__tests__/folders.test.ts:6:16)
+
+FAIL lib/__tests__/groq.test.ts
+  ● Test suite failed to run
+
+    this environment is missing the following Web Fetch API type: Request is not defined. Add one of these imports before your first `import … from 'groq-sdk'`:
+    - `import 'groq-sdk/shims/node'` (if you're running on Node)
+    - `import 'groq-sdk/shims/web'` (otherwise)
+
+       9 |
+      10 |   const system_prompt = `
+    > 11 |     Your primary role is to analyze text. Your response MUST be delivered in a specific persona.
+         |                                                         ^
+      12 |     
+      13 |     **CRITICAL INSTRUCTION: You must adopt the persona of "${personaDescription}".** 
+      14 |     Your entire writing style—word choice, tone, and focus—for the 'summary' and 'takeaways' MUST reflect this persona. The 'actions' should remain direct and clear.
+
+      at Object.getRuntime (node_modules/groq-sdk/src/_shims/web-runtime.ts:28:11)
+      at Object.<anonymous>.exports.init (node_modules/groq-sdk/_shims/index.js:7:40)
+      at Object.<anonymous> (node_modules/groq-sdk/_shims/index.js:17:9)
+      at Object.<anonymous> (node_modules/groq-sdk/src/lib/streaming.ts:1:1)
+      at Object.<anonymous> (node_modules/groq-sdk/src/core.ts:2:1)
+      at Object.<anonymous> (node_modules/groq-sdk/src/index.ts:4:1)
+      at Object.<anonymous> (lib/groq.ts:11:57)
+      at Object.<anonymous> (lib/__tests__/groq.test.ts:6:15)
+
+PASS lib/__tests__/i18n.test.ts
+  i18n (Internationalization)
+    ✓ has default language defined (1 ms)
+    ✓ contains English translations
+    ✓ contains Vietnamese translations
+    ✓ all languages have same translation keys
+    ✓ navigation keys are consistent (3 ms)
+    ✓ summarizer section has required keys (2 ms)
+
+FAIL app/api/__tests__/workspaces.test.ts
+  ● Test suite failed to run
+
+    ReferenceError: Request is not defined
+
+      20 |       .order('created_at', { ascending: false });
+      21 |
+    > 22 |     if (error) {
+         |                 ^
+      23 |       console.error('Error fetching workspaces:', error);
+      24 |       return NextResponse.json({ error: error.message }, { status: 500 });
+      25 |     }
+
+      at Object.Request (node_modules/next/src/server/web/spec-extension/request.ts:14:34)
+      at Object.<anonymous> (node_modules/next/server.js:2:16)
+      at Object.<anonymous> (app/api/workspaces/route.ts:22:17)
+      at Object.<anonymous> (app/api/__tests__/workspaces.test.ts:6:16)
+
+FAIL app/api/__tests__/transcribe.test.ts
+  ● Test suite failed to run
+
+    ReferenceError: Request is not defined
+
+       9 |   const startTime = Date.now();
+      10 |   const logger = createRequestLogger(req);
+    > 11 |   
+         |   ^
+      12 |   try {
+      13 |     const formData = await req.formData();
+      14 |     const file = formData.get('file') as File | null;
+
+      at Object.Request (node_modules/next/src/server/web/spec-extension/request.ts:14:34)
+      at Object.<anonymous> (node_modules/next/server.js:2:16)
+      at Object.<anonymous> (app/api/transcribe/route.ts:11:17)
+      at Object.<anonymous> (app/api/__tests__/transcribe.test.ts:6:16)
+
+FAIL app/api/__tests__/summarize.test.ts
+  ● Test suite failed to run
+
+    ReferenceError: Request is not defined
+
+       9 |   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      10 | );
+    > 11 |
+         | ^
+      12 | export async function POST(req: Request) {
+      13 |   const startTime = Date.now();
+      14 |   const logger = createRequestLogger(req);
+
+      at Object.Request (node_modules/next/src/server/web/spec-extension/request.ts:14:34)
+      at Object.<anonymous> (node_modules/next/server.js:2:16)
+      at Object.<anonymous> (app/api/summarize/route.ts:11:17)
+      at Object.<anonymous> (app/api/__tests__/summarize.test.ts:8:16)
+
+PASS lib/__tests__/supabase.test.ts
+  Supabase Client
+    ✓ creates client with environment variables (3 ms)
+    ✓ client configuration includes auth settings
+    ✓ handles missing environment variables gracefully (1 ms)
+
+FAIL app/api/__tests__/search.test.ts
+  ● Test suite failed to run
+
+    ReferenceError: Request is not defined
+
+       9 |   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      10 | );
+    > 11 |
+         | ^
+      12 | // Cache the embedding pipeline
+      13 | let embedder: any = null;
+      14 |
+
+      at Object.Request (node_modules/next/src/server/web/spec-extension/request.ts:14:34)
+      at Object.<anonymous> (node_modules/next/server.js:2:16)
+      at Object.<anonymous> (app/api/search/route.ts:11:17)
+      at Object.<anonymous> (app/api/__tests__/search.test.ts:7:16)
+
+PASS lib/__tests__/utils.test.ts
+  Utility Functions
+    cn (className merger)
+      ✓ merges multiple class names (5 ms)
+      ✓ handles conditional classes (1 ms)
+      ✓ handles undefined and null values
+      ✓ handles empty input (1 ms)
+      ✓ handles Tailwind class conflicts
+
+PASS lib/__tests__/logger.test.ts
+  Logger
+    Basic Logging
+      ✓ should log debug messages (2 ms)
+      ✓ should log info messages
+      ✓ should log warning messages (1 ms)
+      ✓ should log error messages (10 ms)
+    Context Logging
+      ✓ should include context in log entries (1 ms)
+      ✓ should include metadata in log entries (1 ms)
+      ✓ should include both context and metadata (1 ms)
+    Request/Response Logging
+      ✓ should log API requests (1 ms)
+      ✓ should log successful responses with INFO level (1 ms)
+      ✓ should log client errors with WARN level
+      ✓ should log server errors with ERROR level (1 ms)
+    Performance Tracking
+      ✓ should track successful operation performance (13 ms)
+      ✓ should track failed operation performance (16 ms)
+      ✓ should include context in performance tracking
+    Child Logger
+      ✓ should create child logger with additional context (1 ms)
+      ✓ should merge parent and child contexts (1 ms)
+    Helper Functions
+      ✓ should create request logger with proper context (1 ms)
+      ✓ should log database queries (1 ms)
+      ✓ should log successful external API calls (1 ms)
+      ✓ should log failed external API calls (1 ms)
+
+PASS lib/__tests__/guestMode.test.ts
+  Guest Mode
+    ✓ initializes correctly (1 ms)
+    ✓ checks usage limits
+    ✓ increments usage (1 ms)
+    ✓ adds notes
+    ✓ detects guest mode
+
+Test Suites: 6 failed, 7 passed, 13 total
+Tests:       48 passed, 48 total
+Snapshots:   0 total
+Time:        2.372 s
+Ran all test suites.

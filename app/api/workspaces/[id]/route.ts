@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+type Params = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
 // GET: Lấy chi tiết workspace
-export async function GET(request: NextRequest, context: { params: { id: string } }) {
-  const { id } = context.params;
+export async function GET(request: NextRequest, props: Params) {
+  const params = await props.params;
+  const { id } = params;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { id } = params;
 
     // Get workspace with stats
     const { data: workspace, error } = await supabase
@@ -36,15 +41,14 @@ export async function GET(request: NextRequest, context: { params: { id: string 
 }
 
 // PATCH: Cập nhật workspace
-export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
-  const { id } = context.params;
+export async function PATCH(request: NextRequest, props: Params) {
+  const params = await props.params;
+  const { id } = params;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { id } = params;
     const body = await request.json();
     const { name, description } = body;
 
@@ -89,15 +93,14 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
 }
 
 // DELETE: Xóa workspace
-export async function DELETE(request: NextRequest, context: { params: { id: string } }) {
-  const { id } = context.params;
+export async function DELETE(request: NextRequest, props: Params) {
+  const params = await props.params;
+  const { id } = params;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { id } = params;
 
     // Delete workspace (RLS sẽ check permission)
     const { error } = await supabase
