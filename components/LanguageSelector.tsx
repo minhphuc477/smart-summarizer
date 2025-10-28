@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Languages, Check } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 const languages = [
   { code: 'en', name: 'English', flag: '🇺🇸' },
@@ -22,17 +23,39 @@ const languages = [
 export default function LanguageSelector() {
   const { i18n } = useTranslation();
   const [currentLang, setCurrentLang] = useState(i18n.language || 'en');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    // Load saved language preference
+    // Determine auth state (to avoid 401 spam when guest)
+    supabase.auth.getSession().then(({ data }) => {
+      setIsAuthenticated(!!data.session);
+    });
+    const { data } = supabase.auth.onAuthStateChange((_e, session) => {
+      setIsAuthenticated(!!session);
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    // Load saved language preference; fall back to English
     try {
       const savedLang = localStorage.getItem('preferredLanguage');
-      if (savedLang && savedLang !== i18n.language) {
-        i18n.changeLanguage(savedLang);
-        setCurrentLang(savedLang);
+      const supported = languages.map(l => l.code);
+      if (savedLang && supported.includes(savedLang)) {
+        if (savedLang !== i18n.language) {
+          i18n.changeLanguage(savedLang);
+          setCurrentLang(savedLang);
+        }
+      } else if (i18n.language !== 'en') {
+        i18n.changeLanguage('en');
+        setCurrentLang('en');
       }
     } catch {
       // ignore storage errors
+      if (i18n.language !== 'en') {
+        i18n.changeLanguage('en');
+        setCurrentLang('en');
+      }
     }
   }, [i18n]);
 
@@ -42,16 +65,22 @@ export default function LanguageSelector() {
     try {
       localStorage.setItem('preferredLanguage', langCode);
     } catch {}
-    // Save to backend if user is logged in (best-effort)
-    try {
-      await fetch('/api/user/preferences', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language: langCode }),
-      });
-    } catch (error) {
-      // Non-fatal
-      console.error('Error saving language preference:', error);
+    // Save to backend only if authenticated (avoid 401 spam in guest mode)
+    if (isAuthenticated) {
+      try {
+        const res = await fetch('/api/user/preferences', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: langCode }),
+        });
+        // Ignore 401 and other non-fatal errors silently
+        if (!res.ok && res.status !== 401) {
+          // Optionally log once, but don't throw
+          // console.warn('Failed to persist language preference:', res.status);
+        }
+      } catch {
+        // ignore network errors
+      }
     }
   };
 

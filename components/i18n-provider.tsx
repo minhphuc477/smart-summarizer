@@ -10,8 +10,12 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const saved = typeof window !== 'undefined' ? localStorage.getItem('preferredLanguage') : null;
-      if (saved && saved !== i18n.language) {
+      const supported = ['en', 'vi', 'zh', 'ja', 'ko'];
+      if (saved && supported.includes(saved) && saved !== i18n.language) {
         i18n.changeLanguage(saved);
+      } else if (!saved && i18n.language !== 'en') {
+        // Force English as default if nothing saved
+        i18n.changeLanguage('en');
       }
     } catch {
       // no-op

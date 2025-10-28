@@ -32,7 +32,8 @@ export default function TemplateSelector({ onSelectTemplate }: TemplateSelectorP
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [query, setQuery] = useState('');
-  const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable');
+  // Density is fixed to compact per product decision (no Comfortable option)
+  const density: 'compact' = 'compact';
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -196,22 +197,6 @@ export default function TemplateSelector({ onSelectTemplate }: TemplateSelectorP
               className="h-9"
             />
           </div>
-          <div className="hidden md:flex items-center gap-1">
-            <Button
-              variant={density === 'comfortable' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setDensity('comfortable')}
-            >
-              Comfortable
-            </Button>
-            <Button
-              variant={density === 'compact' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setDensity('compact')}
-            >
-              Compact
-            </Button>
-          </div>
         </div>
 
         {/* Mobile category pills */}
@@ -265,17 +250,20 @@ export default function TemplateSelector({ onSelectTemplate }: TemplateSelectorP
                 No templates found
               </div>
             ) : (
-              <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 ${density === 'compact' ? 'gap-3' : 'gap-4'} pb-2`}>
+              <div
+                className={`grid gap-3 pb-2`}
+                style={{ gridTemplateColumns: `repeat(auto-fill, minmax(200px, 1fr))` }}
+              >
                 {filteredTemplates.map((template) => (
                   <Card
                     key={template.id}
-                    className={`${density === 'compact' ? 'p-3' : 'p-4'} h-full flex flex-col gap-2 cursor-pointer hover:border-primary transition-colors group relative`}
+                    className={`p-3 h-full w-full max-w-full flex flex-col gap-2 cursor-pointer hover:border-primary transition-colors group relative`}
                     onClick={() => handleSelectTemplate(template)}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-2">
                         <FileText className="h-4 w-4 text-primary" />
-                        <h3 className={`font-medium ${density === 'compact' ? 'text-[13px]' : 'text-sm'}`}>{template.name}</h3>
+                        <h3 className={`font-medium whitespace-normal break-words text-[13px] leading-snug line-clamp-2`}>{template.name}</h3>
                       </div>
                       {template.is_system && (
                         <Star className="h-4 w-4 text-yellow-500" fill="currentColor" />
@@ -294,7 +282,7 @@ export default function TemplateSelector({ onSelectTemplate }: TemplateSelectorP
                         </Button>
                       )}
                     </div>
-                    <p className={`text-xs text-muted-foreground ${density === 'compact' ? 'line-clamp-2' : 'line-clamp-3'}`}>
+                    <p className={`text-xs text-muted-foreground line-clamp-2`}>
                       {template.description}
                     </p>
                     <div className="mt-auto pt-2 text-xs">
