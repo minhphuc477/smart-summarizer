@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getServerSupabase } from '@/lib/supabaseServer';
 import { pipeline } from '@xenova/transformers';
 import { createRequestLogger } from '@/lib/logger';
 
 // Tạo Supabase client cho server-side
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = getServerSupabase();
 
 // Cache the embedding pipeline
 let embedder: any = null;
@@ -24,7 +21,7 @@ export async function POST(req: Request) {
   const logger = createRequestLogger(req);
   
   try {
-    const { query, userId, matchCount = 5, matchThreshold = 0.78 } = await req.json();
+  const { query, userId, folderId, matchCount = 5, matchThreshold = 0.78 } = await req.json();
     
     logger.debug('Search request received', { 
       query: query?.substring(0, 50), 
@@ -78,10 +75,16 @@ export async function POST(req: Request) {
     
     logger.logResponse('POST', '/api/search', 200, totalDuration, { userId });
 
+    // Optional folder filter if results include folder_id and folderId provided
+    const results = (data || []);
+    const filtered = (folderId != null)
+      ? results.filter((r: any) => r.folder_id === folderId)
+      : results;
+
     return NextResponse.json({ 
-      results: data || [],
+      results: filtered,
       query: query,
-      count: data?.length || 0 
+      count: filtered.length 
     });
 
   } catch (error: any) {

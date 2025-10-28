@@ -4,6 +4,12 @@ import '@testing-library/jest-dom';
 import History from '../History';
 import * as guestMode from '@/lib/guestMode';
 
+// Mock guestMode module to allow easy stubbing in tests
+jest.mock('@/lib/guestMode', () => ({
+  getGuestHistory: jest.fn(() => []),
+  deleteGuestNote: jest.fn(),
+}));
+
 // Mock supabase
 jest.mock('@/lib/supabase', () => ({
   supabase: {
@@ -47,7 +53,7 @@ describe('History', () => {
 
   describe('Guest Mode', () => {
     beforeEach(() => {
-      jest.spyOn(guestMode, 'getGuestHistory').mockReturnValue([
+      (guestMode.getGuestHistory as jest.Mock).mockReturnValue([
         {
           id: '1',
           original_notes: 'Guest note 1',
@@ -71,7 +77,7 @@ describe('History', () => {
           created_at: '2025-10-28T11:00:00Z',
         },
       ]);
-      jest.spyOn(guestMode, 'deleteGuestNote').mockImplementation(() => {});
+      (guestMode.deleteGuestNote as jest.Mock).mockImplementation(() => {});
     });
 
     test('displays guest notes from localStorage', async () => {
@@ -84,7 +90,7 @@ describe('History', () => {
     });
 
     test('displays empty state when no guest notes', async () => {
-      jest.spyOn(guestMode, 'getGuestHistory').mockReturnValue([]);
+  (guestMode.getGuestHistory as jest.Mock).mockReturnValue([]);
       
       render(<History isGuest={true} />);
       

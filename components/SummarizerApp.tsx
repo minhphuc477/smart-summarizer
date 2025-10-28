@@ -17,6 +17,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Terminal, Copy, X, Volume2, VolumeX, AlertCircle, Calendar } from "lucide-react";
 import { useSpeech } from '@/lib/useSpeech';
 
@@ -30,6 +38,7 @@ import FolderSidebar from './FolderSidebar';
 import WorkspaceManager from './WorkspaceManager';
 import { ThemeToggle } from './theme-toggle';
 import TemplateSelector from './TemplateSelector';
+import { useRouter } from 'next/navigation';
 import VoiceInputButton from './VoiceInputButton';
 import LanguageSelector from './LanguageSelector';
 import EncryptionDialog from './EncryptionDialog';
@@ -57,6 +66,7 @@ type SummaryResult = {
 
 // Component chính của ứng dụng
 export default function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode: boolean }) {
+  const router = useRouter();
   
   // === Quản lý State ===
   const [notes, setNotes] = useState("");
@@ -68,6 +78,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [remainingUses, setRemainingUses] = useState(5);
+  const [showFolders, setShowFolders] = useState(false);
 
   // Hook cho Text-to-Speech
   const { speak, stop, isSpeaking, isSupported } = useSpeech();
@@ -227,6 +238,12 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
         <div className="w-full max-w-3xl flex justify-between items-center mb-6">
             <div className="flex items-center gap-4">
               {!isGuestMode && <NavigationMenu />}
+              {/* Mobile: open Folders drawer */}
+              {!isGuestMode && (
+                <Button className="lg:hidden" variant="outline" onClick={() => setShowFolders(true)}>
+                  Folders
+                </Button>
+              )}
               <span className="text-muted-foreground text-sm hidden sm:block">
             {isGuestMode ? (
               <span className="flex items-center gap-2">
@@ -247,7 +264,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
           </div>
         </div>
 
-        <div className="w-full max-w-3xl">
+  <div className="w-full max-w-3xl">
           <header className="text-center mb-10">
             <h1 className="text-4xl font-bold text-foreground tracking-tight">Smart Note Summarizer</h1>
             <p className="text-muted-foreground mt-2">
@@ -255,7 +272,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
             </p>
             {isGuestMode && (
               <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
-                ⚠️ Guest mode: Limited to {remainingUses} summaries. Sign in for unlimited access!
+                ⚠️ Limited to {remainingUses} summaries while signed out. Sign in for unlimited access!
               </p>
             )}
           </header>
@@ -273,9 +290,11 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                 onChange={(e) => setCustomPersona(e.target.value)}
               />
               <TemplateSelector 
-                onSelectTemplate={(template) => {
-                  setCustomPersona(template.name);
-                  setNotes(template.content);
+                onSelectTemplate={(template: any) => {
+                  const persona = template.persona_prompt || template.name || '';
+                  const seed = template.content || template.structure || '';
+                  setCustomPersona(persona);
+                  setNotes(seed);
                 }}
               />
             </div>
@@ -328,7 +347,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
             disabled={isLoading || !notes.trim()}
             aria-label="Summarize"
           >
-            {isLoading ? "Generating..." : "Generate Summary"}
+            {isLoading ? "Processing..." : "Generate Summary"}
           </Button>
         </section>
         
@@ -352,6 +371,61 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
 
           {result && !isLoading && (
             <>
+              {/* Accessible TTS control for the entire result */}
+              <div className="flex items-center justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const allText = [
+                      result.summary,
+                      ...(result.takeaways || []).map(t => `• ${t}`),
+                      ...(result.actions || []).map(a => `- ${a.task}${a.datetime ? ` (${new Date(a.datetime).toLocaleString()})` : ''}`)
+                    ].join('\n');
+                    handleSpeak(allText, 'all');
+                  }}
+                  aria-label={currentSpeaking === 'all' && isSpeaking ? 'Dừng đọc toàn bộ' : 'Đọc cho tôi nghe'}
+                >
+                  {currentSpeaking === 'all' && isSpeaking ? 'Dừng đọc' : 'Đọc cho tôi nghe'}
+                </Button>
+                <Button
+                  className="ml-2"
+                  variant="outline"
+                  onClick={() => {
+                    try {
+                      const nodes = [
+                        {
+                          id: `summary-${Date.now()}`,
+                          type: 'default',
+                          position: { x: 80, y: 60 },
+                          data: { label: `Summary\n\n${result.summary}` },
+                          style: { backgroundColor: '#ecfeff', border: '2px solid #06b6d4', borderRadius: '8px', padding: '10px', width: 360, height: 160 },
+                        },
+                        ...((result.takeaways || []).map((t, i) => ({
+                          id: `takeaway-${i}-${Date.now()}`,
+                          type: 'default',
+                          position: { x: 80 + (i%3)*220, y: 260 + Math.floor(i/3)*180 },
+                          data: { label: `Takeaway ${i+1}: ${t}` },
+                          style: { backgroundColor: '#fef3c7', border: '2px solid #f59e0b', borderRadius: '8px', padding: '10px', width: 200, height: 120 },
+                        }))),
+                        ...((result.actions || []).map((a, i) => ({
+                          id: `action-${i}-${Date.now()}`,
+                          type: 'default',
+                          position: { x: 760 + (i%3)*220, y: 260 + Math.floor(i/3)*180 },
+                          data: { label: `Action ${i+1}: ${(a.task || (a as any).title)}` },
+                          style: { backgroundColor: '#dcfce7', border: '2px solid #22c55e', borderRadius: '8px', padding: '10px', width: 220, height: 120 },
+                        }))),
+                      ];
+                      const edges: any[] = [];
+                      sessionStorage.setItem('canvasDraft', JSON.stringify({ title: 'Summary Canvas', nodes, edges }));
+                      router.push('/canvas');
+                    } catch (e) {
+                      console.error('Failed to open in Canvas', e);
+                    }
+                  }}
+                >
+                  Open in Canvas
+                </Button>
+              </div>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle>Summary (TL;DR)</CardTitle>
@@ -401,7 +475,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                               key={`tag-${index}`}
                               className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800"
                             >
-                              #{tag}
+                              {tag}
                             </span>
                           ))}
                         </div>
@@ -432,7 +506,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        onClick={() => handleSpeak(result.takeaways.join('. '), 'takeaways')}
+                        onClick={() => handleSpeak((result.takeaways || []).join('. '), 'takeaways')}
                         className={currentSpeaking === 'takeaways' && isSpeaking ? "text-blue-600 dark:text-blue-400" : ""}
                         aria-label={currentSpeaking === 'takeaways' && isSpeaking ? 'Stop speaking takeaways' : 'Speak takeaways'}
                       >
@@ -455,7 +529,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                 </CardHeader>
                 <CardContent>
                   <ul className="list-disc list-inside space-y-2 text-foreground">
-                    {result.takeaways.map((item, index) => <li key={`takeaway-${index}`}>{item}</li>)}
+                    {(result.takeaways || []).map((item, index) => <li key={`takeaway-${index}`}>{item}</li>)}
                   </ul>
                 </CardContent>
               </Card>
@@ -464,11 +538,11 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle>Action Items</CardTitle>
                   <div className="flex gap-1">
-                    {isSupported && result.actions.length > 0 && (
+                    {isSupported && (result.actions || []).length > 0 && (
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        onClick={() => handleSpeak(result.actions.join('. '), 'actions')}
+                        onClick={() => handleSpeak((result.actions || []).map(a => (a.task || (a as any).title)).join('. '), 'actions')}
                         className={currentSpeaking === 'actions' && isSpeaking ? "text-blue-600 dark:text-blue-400" : ""}
                         aria-label={currentSpeaking === 'actions' && isSpeaking ? 'Stop speaking actions' : 'Speak actions'}
                       >
@@ -483,19 +557,19 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                       variant="ghost"
                       size="icon"
                       aria-label="Copy actions"
-                      onClick={() => handleCopy(result.actions.map(a => a.task).join('\n- '))}
+                      onClick={() => handleCopy((result.actions || []).map(a => (a.task || (a as any).title)).join('\n- '))}
                     >
                       <Copy className="h-4 w-4" />
                     </Button>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {result.actions.length > 0 ? (
+                  {(result.actions || []).length > 0 ? (
                     <ul className="list-disc list-inside space-y-2 text-foreground">
-                      {result.actions.map((item, index) => (
+                      {(result.actions || []).map((item, index) => (
                         <li key={`action-${index}`} className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 flex-1">
-                            <span>{item.task}</span>
+                            <span>{item.task || (item as any).title}</span>
                             {item.datetime && (
                               <span className="text-xs text-muted-foreground">
                                 ({new Date(item.datetime).toLocaleString()})
@@ -512,7 +586,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                               <DropdownMenuContent align="end">
                                 {(() => {
                                   const links = generateCalendarLinks({
-                                    task: item.task,
+                                    task: item.task || (item as any).title,
                                     datetime: item.datetime,
                                     description: result.summary.slice(0, 100)
                                   });
@@ -568,7 +642,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
         
         {/* === HIỂN THỊ LỊCH SỬ GHI CHÚ === */}
         {!isGuestMode ? (
-          <History selectedFolderId={selectedFolderId} />
+          <History selectedFolderId={selectedFolderId} userId={session.user.id} />
         ) : (
           <History isGuest={true} />
         )}
@@ -577,6 +651,21 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
         {!isGuestMode && <SearchBar userId={session.user.id} />}
         </div>
       </div>
+    {!isGuestMode && (
+      <Dialog open={showFolders} onOpenChange={setShowFolders}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Folders</DialogTitle>
+            <DialogDescription>Manage your folders and select one to filter notes.</DialogDescription>
+          </DialogHeader>
+          <FolderSidebar 
+            userId={session.user.id}
+            onFolderSelect={(id) => { setSelectedFolderId(id); setShowFolders(false); }}
+            selectedFolderId={selectedFolderId}
+          />
+        </DialogContent>
+      </Dialog>
+    )}
     </main>
   );
 }

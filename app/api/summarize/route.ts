@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getGroqSummary } from '@/lib/groq'; // Import hàm tái sử dụng
-import { createClient } from '@supabase/supabase-js';
+import { getServerSupabase } from '@/lib/supabaseServer';
 import { createRequestLogger } from '@/lib/logger';
 
 // Tạo Supabase client cho server-side
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = getServerSupabase();
 
 export async function POST(req: Request) {
   const startTime = Date.now();

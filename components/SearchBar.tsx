@@ -18,9 +18,10 @@ type SearchResult = {
 
 type SearchBarProps = {
   userId: string;
+  folderId?: number | null;
 };
 
-export default function SearchBar({ userId }: SearchBarProps) {
+export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -43,6 +44,7 @@ export default function SearchBar({ userId }: SearchBarProps) {
         body: JSON.stringify({
           query: searchQuery,
           userId: userId,
+          folderId: folderId,
           matchCount: 5,
           matchThreshold: 0.75
         })

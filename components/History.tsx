@@ -6,7 +6,8 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Trash2, FolderInput, Share2, Copy, Check } from 'lucide-react';
-import { getGuestHistory, deleteGuestNote, type GuestNote } from '@/lib/guestMode';
+import * as guestMode from '@/lib/guestMode';
+import type { GuestNote } from '@/lib/guestMode';
 import {
   Dialog,
   DialogContent,
@@ -53,12 +54,16 @@ type Folder = {
   color: string;
 };
 
+import SearchBar from './SearchBar';
+import { Input } from '@/components/ui/input';
+
 type HistoryProps = {
   isGuest?: boolean;
   selectedFolderId?: number | null;
+  userId?: string;
 };
 
-export default function History({ isGuest = false, selectedFolderId = null }: HistoryProps) {
+export default function History({ isGuest = false, selectedFolderId = null, userId }: HistoryProps) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [guestNotes, setGuestNotes] = useState<GuestNote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +72,10 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
   const [selectedFolder, setSelectedFolder] = useState<string>("");
   const [copiedNoteId, setCopiedNoteId] = useState<number | null>(null);
   const [deleteNoteId, setDeleteNoteId] = useState<number | string | null>(null);
+  const [filterQuery, setFilterQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchInFolder, setSearchInFolder] = useState(false);
+  const [analyzingNoteId, setAnalyzingNoteId] = useState<number | null>(null);
 
   const getSentimentEmoji = (sentiment?: string) => {
     switch (sentiment) {
@@ -84,7 +93,7 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
     const fetchNotes = async () => {
       if (isGuest) {
         // Guest mode: fetch from localStorage
-        setGuestNotes(getGuestHistory());
+  setGuestNotes(guestMode.getGuestHistory());
         setLoading(false);
       } else {
         // Logged in: fetch from Supabase
@@ -97,8 +106,8 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
           .order('name');
         setFolders(foldersData || []);
 
-        // Build query
-        let query = supabase
+        // Build base select
+        const base = supabase
           .from('notes')
           .select(`
             id, 
@@ -114,20 +123,18 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
               name,
               color
             ),
-            note_tags!inner (
-              tags!inner (
+            note_tags (
+              tags (
                 id,
                 name
               )
             )
-          `)
-          .order('created_at', { ascending: false })
-          .limit(20);
+          `);
 
-        // Filter by folder if selected
-        if (selectedFolderId !== null) {
-          query = query.eq('folder_id', selectedFolderId);
-        }
+        // Apply optional folder filter and then order
+        const query = selectedFolderId !== null
+          ? base.eq('folder_id', selectedFolderId).order('created_at', { ascending: false })
+          : base.order('created_at', { ascending: false });
 
         const { data, error } = await query;
 
@@ -149,8 +156,8 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
     const id = deleteNoteId as number | string;
     try {
       if (isGuest) {
-        deleteGuestNote(id as string);
-        setGuestNotes(getGuestHistory());
+  guestMode.deleteGuestNote(id as string);
+  setGuestNotes(guestMode.getGuestHistory());
       } else {
         const { error } = await supabase
           .from('notes')
@@ -177,7 +184,7 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
       .eq('id', moveNoteId);
 
     if (!error) {
-      // Refresh notes
+      // Refresh notes (left joins to include untagged notes)
       const { data } = await supabase
         .from('notes')
         .select(`
@@ -194,34 +201,86 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
             name,
             color
           ),
-          note_tags!inner (
-            tags!inner (
+          note_tags (
+            tags (
               id,
               name
             )
           )
         `)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      
+  .order('created_at', { ascending: false });
+
       setNotes((data || []) as unknown as Note[]);
       setMoveNoteId(null);
       setSelectedFolder("");
     }
   };
 
-  // Toggle public sharing
-  const handleToggleShare = async (noteId: number, currentIsPublic: boolean) => {
+  // Refresh a single note with relations
+  const refreshOneNote = async (noteId: number) => {
     const { data, error } = await supabase
       .from('notes')
-      .update({ is_public: !currentIsPublic })
+      .select(`
+        id, 
+        created_at, 
+        summary, 
+        persona, 
+        sentiment,
+        folder_id,
+        is_public,
+        share_id,
+        folders (
+          id,
+          name,
+          color
+        ),
+        note_tags (
+          tags (
+            id,
+            name
+          )
+        )
+      `)
       .eq('id', noteId)
-      .select()
       .single();
-
     if (!error && data) {
-      // Update local state
-      setNotes(notes.map(n => n.id === noteId ? { ...n, is_public: data.is_public } : n));
+      setNotes(prev => prev.map(n => (n.id === noteId ? (data as unknown as Note) : n)));
+    }
+  };
+
+  // Analyze note to regenerate tags & sentiment
+  const handleAnalyze = async (noteId: number) => {
+    try {
+      setAnalyzingNoteId(noteId);
+      const res = await fetch(`/api/notes/${noteId}/analyze`, { method: 'POST' });
+      if (!res.ok) {
+        console.error('Failed to analyze note');
+        return;
+      }
+      await refreshOneNote(noteId);
+    } catch (e) {
+      console.error('Analyze error:', e);
+    } finally {
+      setAnalyzingNoteId(null);
+    }
+  };
+
+  // Toggle public sharing
+  const handleToggleShare = async (noteId: number, currentIsPublic: boolean) => {
+    try {
+      const res = await fetch(`/api/notes/${noteId}/share`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic: !currentIsPublic }),
+      });
+      if (!res.ok) {
+        console.error('Failed to toggle share');
+        return;
+      }
+      const { note } = await res.json();
+      setNotes(notes.map(n => n.id === noteId ? { ...n, is_public: note.is_public, share_id: note.share_id } : n));
+    } catch (e) {
+      console.error('Error toggling share:', e);
     }
   };
 
@@ -245,15 +304,45 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
   
   return (
     <div className="mt-10">
-      <h2 className="text-2xl font-bold mb-4 text-foreground">
-        History
-        {selectedFolderId !== null && !isGuest && " (Filtered)"}
-      </h2>
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <h2 className="text-2xl font-bold text-foreground">
+          History{selectedFolderId !== null && !isGuest ? ' (Filtered)' : ''}
+        </h2>
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Filter by keyword..."
+            value={filterQuery}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilterQuery(e.target.value)}
+            className="w-full sm:w-64"
+          />
+          {!isGuest && userId && (
+            <Button variant="outline" onClick={() => setIsSearchOpen(true)} aria-label="Open semantic search">
+              Semantic Search
+            </Button>
+          )}
+        </div>
+      </div>
       <div className="space-y-4">
         {isGuest ? (
           // Guest mode
-          guestNotes.length > 0 ? (
-            guestNotes.map(note => (
+          (guestNotes.filter(n => {
+            const q = filterQuery.trim().toLowerCase();
+            if (!q) return true;
+            return (
+              n.summary.toLowerCase().includes(q) ||
+              (n.persona || '').toLowerCase().includes(q) ||
+              (n.tags || []).some(t => (t || '').toLowerCase().includes(q))
+            );
+          }).length > 0) ? (
+            guestNotes.filter(n => {
+              const q = filterQuery.trim().toLowerCase();
+              if (!q) return true;
+              return (
+                n.summary.toLowerCase().includes(q) ||
+                (n.persona || '').toLowerCase().includes(q) ||
+                (n.tags || []).some(t => (t || '').toLowerCase().includes(q))
+              );
+            }).map(note => (
               <Card key={note.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -298,12 +387,28 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
               </Card>
             ))
           ) : (
-            <p className="text-muted-foreground">No notes saved yet.</p>
+            <p className="text-muted-foreground">No notes yet.</p>
           )
         ) : (
           // Logged in mode
-          notes.length > 0 ? (
-            notes.map(note => (
+          (notes.filter(n => {
+            const q = filterQuery.trim().toLowerCase();
+            if (!q) return true;
+            return (
+              n.summary.toLowerCase().includes(q) ||
+              (n.persona || '').toLowerCase().includes(q) ||
+              (n.note_tags || []).some(nt => (nt.tags?.name || '').toLowerCase().includes(q))
+            );
+          }).length > 0) ? (
+            notes.filter(n => {
+              const q = filterQuery.trim().toLowerCase();
+              if (!q) return true;
+              return (
+                n.summary.toLowerCase().includes(q) ||
+                (n.persona || '').toLowerCase().includes(q) ||
+                (n.note_tags || []).some(nt => (nt.tags?.name || '').toLowerCase().includes(q))
+              );
+            }).map(note => (
               <Card key={note.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -319,7 +424,7 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
                               border: `1px solid ${note.folders.color}40`
                             }}
                           >
-                            📁 {note.folders.name}
+                            {note.folders.name}
                           </span>
                         )}
                       </div>
@@ -334,6 +439,16 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
                           {getSentimentEmoji(note.sentiment)}
                         </span>
                       )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleAnalyze(note.id)}
+                        disabled={analyzingNoteId === note.id}
+                        aria-label="Analyze note"
+                        title="Regenerate tags and sentiment"
+                      >
+                        {analyzingNoteId === note.id ? 'Analyzing…' : 'Analyze'}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -355,6 +470,9 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
                       >
                         <Share2 className="h-4 w-4" />
                       </Button>
+                      {note.is_public && (
+                        <span className="text-xs font-medium text-green-600 dark:text-green-400 ml-1">Public</span>
+                      )}
                       {note.is_public && note.share_id && (
                         <Button
                           variant="ghost"
@@ -389,7 +507,7 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
                           key={`${note.id}-tag-${index}`}
                           className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
                         >
-                          #{noteTag.tags.name}
+                          {noteTag.tags.name}
                         </span>
                       ))}
                     </div>
@@ -398,11 +516,7 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
               </Card>
             ))
           ) : (
-            <p className="text-muted-foreground">
-              {selectedFolderId !== null 
-                ? "No notes in this folder yet." 
-                : "No notes saved yet."}
-            </p>
+            <p className="text-muted-foreground">No notes yet.</p>
           )
         )}
       </div>
@@ -411,7 +525,7 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
       <Dialog open={moveNoteId !== null} onOpenChange={() => setMoveNoteId(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Move Note to Folder</DialogTitle>
+            <DialogTitle>Move to Folder</DialogTitle>
             <DialogDescription>
               Choose a folder for this note
             </DialogDescription>
@@ -459,6 +573,34 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Semantic Search Dialog */}
+      {!isGuest && userId && (
+        <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Semantic Search</DialogTitle>
+              <DialogDescription>
+                Search your notes by meaning. Try queries like "urgent tasks" or "meeting with Alice".
+              </DialogDescription>
+            </DialogHeader>
+            <div className="pt-2 space-y-3">
+              <div className="flex items-center gap-2">
+                <input
+                  id="search-in-folder"
+                  type="checkbox"
+                  checked={searchInFolder}
+                  onChange={(e) => setSearchInFolder(e.target.checked)}
+                />
+                <label htmlFor="search-in-folder" className="text-sm">
+                  Search in selected folder{selectedFolderId != null ? ` (#${selectedFolderId})` : ''}
+                </label>
+              </div>
+              <SearchBar userId={userId} folderId={searchInFolder ? selectedFolderId ?? null : null} />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

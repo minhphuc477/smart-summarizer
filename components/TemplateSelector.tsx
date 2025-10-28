@@ -4,16 +4,20 @@ import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { FileText, Star, Trash2 } from 'lucide-react';
 
 type Template = {
   id: string;
   name: string;
   description: string;
-  content: string;
+  content?: string;
   category: string;
   is_system: boolean;
   created_at: string;
+  persona_prompt?: string;
+  structure?: string;
 };
 
 type TemplateSelectorProps = {
@@ -25,6 +29,15 @@ export default function TemplateSelector({ onSelectTemplate }: TemplateSelectorP
   const [loading, setLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [open, setOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({
+    name: '',
+    description: '',
+    category: 'meetings',
+    persona_prompt: '',
+    structure: ''
+  });
 
   const categories = [
     { id: 'all', name: 'All Templates' },
@@ -107,6 +120,9 @@ export default function TemplateSelector({ onSelectTemplate }: TemplateSelectorP
                 {category.name}
               </button>
             ))}
+            <Button className="mt-3 w-full" size="sm" onClick={() => setCreateOpen(true)}>
+              Create Template
+            </Button>
           </div>
 
           {/* Templates Grid */}
@@ -164,6 +180,66 @@ export default function TemplateSelector({ onSelectTemplate }: TemplateSelectorP
           </div>
         </div>
       </DialogContent>
+
+      {/* Create Template Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create Template</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              placeholder="Name"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
+            <Input
+              placeholder="Category (e.g., meetings, planning)"
+              value={form.category}
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
+            />
+            <Textarea
+              placeholder="Description"
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+            />
+            <Textarea
+              placeholder="Persona prompt (optional)"
+              value={form.persona_prompt}
+              onChange={(e) => setForm({ ...form, persona_prompt: e.target.value })}
+            />
+            <Textarea
+              placeholder="Structure or starter content"
+              value={form.structure}
+              onChange={(e) => setForm({ ...form, structure: e.target.value })}
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+              <Button
+                onClick={async () => {
+                  setCreating(true);
+                  try {
+                    const res = await fetch('/api/templates', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(form),
+                    });
+                    if (res.ok) {
+                      setCreateOpen(false);
+                      await loadTemplates();
+                    }
+                  } finally {
+                    setCreating(false);
+                  }
+                }}
+                disabled={creating || !form.name.trim() || !form.category.trim() || !form.structure.trim()}
+              >
+                {creating ? 'Creating…' : 'Create'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

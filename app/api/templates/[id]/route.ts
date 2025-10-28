@@ -45,9 +45,23 @@ export async function POST(request: NextRequest, props: Params) {
     }
 
     // Increment usage count
+    // Note: Supabase JS does not support SQL literals in .update directly.
+    // For safe increment without a custom RPC, read current value then update.
+    // This is not strictly atomic under heavy concurrency, but sufficient for typical usage.
+    const { data: current, error: readError } = await supabase
+      .from('templates')
+      .select('id, name, usage_count')
+      .eq('id', id)
+      .single();
+
+    if (readError || !current) {
+      console.error('Error reading template for increment:', readError);
+      return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+    }
+
     const { data: template, error } = await supabase
       .from('templates')
-      .update({ usage_count: supabase.rpc('increment') })
+      .update({ usage_count: (current.usage_count || 0) + 1 })
       .eq('id', id)
       .select()
       .single();
@@ -81,7 +95,7 @@ export async function DELETE(request: NextRequest, props: Params) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Delete (RLS will ensure user can only delete their own)
+    // Delete only non-system templates owned by the user
     const { error } = await supabase
       .from('templates')
       .delete()

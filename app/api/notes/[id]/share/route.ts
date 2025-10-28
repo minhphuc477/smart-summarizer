@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getServerSupabase } from '@/lib/supabaseServer';
+import crypto from 'crypto';
 
 type Params = {
   params: Promise<{
@@ -12,6 +13,7 @@ export async function PATCH(request: NextRequest, props: Params) {
   const params = await props.params;
   const { id } = params;
   try {
+    const supabase = getServerSupabase();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -26,10 +28,28 @@ export async function PATCH(request: NextRequest, props: Params) {
       );
     }
 
-    // Update note
+    // If enabling public share, ensure a persistent share_id exists
+    let updatePayload: Record<string, any> = { is_public: isPublic };
+    if (isPublic) {
+      const { data: existing, error: readErr } = await supabase
+        .from('notes')
+        .select('share_id')
+        .eq('id', id)
+        .eq('user_id', session.user.id)
+        .single();
+      if (readErr) {
+        console.error('Error reading note before share:', readErr);
+        return NextResponse.json({ error: 'Note not found' }, { status: 404 });
+      }
+      if (!existing?.share_id) {
+        updatePayload.share_id = crypto.randomUUID();
+      }
+    }
+
+    // Update note with share state (and possibly share_id)
     const { data: note, error } = await supabase
       .from('notes')
-      .update({ is_public: isPublic })
+      .update(updatePayload)
       .eq('id', id)
       .eq('user_id', session.user.id) // Only owner can change
       .select()
