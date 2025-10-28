@@ -147,6 +147,12 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
       return;
     }
 
+    // Prevent submitting encrypted content (requires client-side decrypt first)
+    if (notes.includes('"encrypted"') && notes.includes('"ciphertext"')) {
+      setError('Your notes appear to be encrypted. Please decrypt them before summarizing.');
+      return;
+    }
+
     setIsLoading(true);
     setResult(null);
     setError(null);

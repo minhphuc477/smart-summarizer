@@ -39,6 +39,20 @@ export default function CanvasEditor({ canvasId, workspaceId, onSave }: CanvasEd
   useEffect(() => {
     if (canvasId) {
       loadCanvas(canvasId);
+    } else {
+      // Load draft from sessionStorage when arriving from SummarizerApp
+      try {
+        const draft = sessionStorage.getItem('canvasDraft');
+        if (draft) {
+          const parsed = JSON.parse(draft);
+          if (parsed.title) setTitle(parsed.title);
+          if (Array.isArray(parsed.nodes)) setNodes(parsed.nodes);
+          if (Array.isArray(parsed.edges)) setEdges(parsed.edges);
+          sessionStorage.removeItem('canvasDraft');
+        }
+      } catch (e) {
+        console.warn('Failed to load canvas draft:', e);
+      }
     }
   }, [canvasId]);
 

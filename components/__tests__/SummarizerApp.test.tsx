@@ -3,6 +3,17 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import SummarizerApp from '../SummarizerApp';
 
+// Mock Next.js App Router
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    prefetch: jest.fn(),
+    back: jest.fn(),
+    forward: jest.fn(),
+  }),
+}));
+
 // Mock guestMode module
 jest.mock('@/lib/guestMode', () => ({
   getRemainingUsage: jest.fn(() => 5),

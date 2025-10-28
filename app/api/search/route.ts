@@ -50,16 +50,21 @@ export async function POST(req: Request) {
 
     // 2. Gọi RPC function trên Supabase để tìm các ghi chú tương tự
     const searchStart = Date.now();
-    const { data, error } = await supabase.rpc('match_notes', {
+    const useFolderRpc = folderId !== null && folderId !== undefined;
+    const procName = useFolderRpc ? 'match_notes_by_folder' : 'match_notes';
+    const rpcArgs: any = {
       query_embedding: queryEmbedding,
       match_threshold: matchThreshold,
       match_count: matchCount,
       filter_user_id: userId || null,
-    });
+    };
+    if (useFolderRpc) rpcArgs.filter_folder_id = folderId;
+
+    const { data, error } = await supabase.rpc(procName, rpcArgs);
     const searchDuration = Date.now() - searchStart;
 
     if (error) {
-      logger.error("Semantic search error", error as Error, { userId });
+      logger.error("Semantic search error", error as Error, { userId, procName });
       return NextResponse.json({ 
         error: "Failed to search notes. Make sure you've run the semantic-search migration SQL." 
       }, { status: 500 });
@@ -75,16 +80,13 @@ export async function POST(req: Request) {
     
     logger.logResponse('POST', '/api/search', 200, totalDuration, { userId });
 
-    // Optional folder filter if results include folder_id and folderId provided
+    // Results from RPC (already folder-filtered when applicable)
     const results = (data || []);
-    const filtered = (folderId != null)
-      ? results.filter((r: any) => r.folder_id === folderId)
-      : results;
 
     return NextResponse.json({ 
-      results: filtered,
+      results,
       query: query,
-      count: filtered.length 
+      count: results.length 
     });
 
   } catch (error: any) {

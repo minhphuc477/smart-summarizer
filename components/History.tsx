@@ -76,6 +76,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchInFolder, setSearchInFolder] = useState(false);
   const [analyzingNoteId, setAnalyzingNoteId] = useState<number | null>(null);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const getSentimentEmoji = (sentiment?: string) => {
     switch (sentiment) {
@@ -255,11 +256,17 @@ export default function History({ isGuest = false, selectedFolderId = null, user
       const res = await fetch(`/api/notes/${noteId}/analyze`, { method: 'POST' });
       if (!res.ok) {
         console.error('Failed to analyze note');
+        setToast({ type: 'error', message: 'Analyze failed. Please try again.' });
+        setTimeout(() => setToast(null), 3000);
         return;
       }
       await refreshOneNote(noteId);
+      setToast({ type: 'success', message: 'Analysis complete. Tags & sentiment updated.' });
+      setTimeout(() => setToast(null), 2500);
     } catch (e) {
       console.error('Analyze error:', e);
+      setToast({ type: 'error', message: 'Analyze failed due to a network error.' });
+      setTimeout(() => setToast(null), 3000);
     } finally {
       setAnalyzingNoteId(null);
     }
@@ -303,7 +310,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
   }
   
   return (
-    <div className="mt-10">
+    <div className="mt-10 relative">
       <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h2 className="text-2xl font-bold text-foreground">
           History{selectedFolderId !== null && !isGuest ? ' (Filtered)' : ''}
@@ -322,6 +329,22 @@ export default function History({ isGuest = false, selectedFolderId = null, user
           )}
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed right-4 bottom-4 z-50 px-4 py-3 rounded-md shadow-lg border ${
+            toast.type === 'success'
+              ? 'bg-green-50 border-green-200 text-green-800'
+              : 'bg-red-50 border-red-200 text-red-700'
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
+
       <div className="space-y-4">
         {isGuest ? (
           // Guest mode
