@@ -289,7 +289,13 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                 onChange={(e) => setNotes(e.target.value)}
               />
               {notes && (
-                <Button variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => setNotes("")}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Clear notes"
+                  className="absolute top-2 right-2"
+                  onClick={() => setNotes("")}
+                > 
                   <X className="h-4 w-4" />
                 </Button>
               )}
@@ -320,6 +326,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
             className="w-full text-lg font-semibold bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400"
             onClick={handleSubmit}
             disabled={isLoading || !notes.trim()}
+            aria-label="Summarize"
           >
             {isLoading ? "Generating..." : "Generate Summary"}
           </Button>
@@ -355,6 +362,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                         size="icon" 
                         onClick={() => handleSpeak(result.summary, 'summary')}
                         className={currentSpeaking === 'summary' && isSpeaking ? "text-blue-600 dark:text-blue-400" : ""}
+                        aria-label={currentSpeaking === 'summary' && isSpeaking ? 'Stop speaking summary' : 'Speak summary'}
                       >
                         {currentSpeaking === 'summary' && isSpeaking ? (
                           <VolumeX className="h-4 w-4" />
@@ -363,7 +371,12 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                         )}
                       </Button>
                     )}
-                    <Button variant="ghost" size="icon" onClick={() => handleCopy(result.summary)}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Copy summary"
+                      onClick={() => handleCopy(result.summary)}
+                    >
                       <Copy className="h-4 w-4" />
                     </Button>
                   </div>
@@ -421,6 +434,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                         size="icon" 
                         onClick={() => handleSpeak(result.takeaways.join('. '), 'takeaways')}
                         className={currentSpeaking === 'takeaways' && isSpeaking ? "text-blue-600 dark:text-blue-400" : ""}
+                        aria-label={currentSpeaking === 'takeaways' && isSpeaking ? 'Stop speaking takeaways' : 'Speak takeaways'}
                       >
                         {currentSpeaking === 'takeaways' && isSpeaking ? (
                           <VolumeX className="h-4 w-4" />
@@ -429,7 +443,12 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                         )}
                       </Button>
                     )}
-                    <Button variant="ghost" size="icon" onClick={() => handleCopy(result.takeaways.join('\n- '))}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Copy takeaways"
+                      onClick={() => handleCopy(result.takeaways.join('\n- '))}
+                    >
                       <Copy className="h-4 w-4" />
                     </Button>
                   </div>
@@ -451,6 +470,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                         size="icon" 
                         onClick={() => handleSpeak(result.actions.join('. '), 'actions')}
                         className={currentSpeaking === 'actions' && isSpeaking ? "text-blue-600 dark:text-blue-400" : ""}
+                        aria-label={currentSpeaking === 'actions' && isSpeaking ? 'Stop speaking actions' : 'Speak actions'}
                       >
                         {currentSpeaking === 'actions' && isSpeaking ? (
                           <VolumeX className="h-4 w-4" />
@@ -459,7 +479,12 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                         )}
                       </Button>
                     )}
-                    <Button variant="ghost" size="icon" onClick={() => handleCopy(result.actions.map(a => a.task).join('\n- '))}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Copy actions"
+                      onClick={() => handleCopy(result.actions.map(a => a.task).join('\n- '))}
+                    >
                       <Copy className="h-4 w-4" />
                     </Button>
                   </div>

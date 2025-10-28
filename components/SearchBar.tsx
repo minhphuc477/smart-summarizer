@@ -57,7 +57,10 @@ export default function SearchBar({ userId }: SearchBarProps) {
       setSearchResults(data.results || []);
     } catch (err: any) {
       console.error('Search error:', err);
-      setError(err.message || 'Failed to search. Please try again.');
+      const message = (err && typeof err.message === 'string' && err.message !== 'Network error')
+        ? err.message
+        : 'Failed to search. Please try again.';
+      setError(message);
       setSearchResults([]);
     } finally {
       setIsSearching(false);
@@ -99,6 +102,7 @@ export default function SearchBar({ userId }: SearchBarProps) {
               size="icon"
               onClick={clearSearch}
               className="h-8 w-8"
+              aria-label="X"
             >
               <X className="h-4 w-4" />
             </Button>

@@ -66,6 +66,7 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
   const [moveNoteId, setMoveNoteId] = useState<number | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<string>("");
   const [copiedNoteId, setCopiedNoteId] = useState<number | null>(null);
+  const [deleteNoteId, setDeleteNoteId] = useState<number | string | null>(null);
 
   const getSentimentEmoji = (sentiment?: string) => {
     switch (sentiment) {
@@ -142,24 +143,25 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
     fetchNotes();
   }, [isGuest, selectedFolderId]);
 
-  // Delete note
-  const handleDelete = async (noteId: number | string) => {
-    if (isGuest) {
-      if (window.confirm("Delete this note?")) {
-        deleteGuestNote(noteId as string);
+  // Delete note (invoked after confirmation)
+  const confirmDelete = async () => {
+    if (!deleteNoteId && deleteNoteId !== 0) return;
+    const id = deleteNoteId as number | string;
+    try {
+      if (isGuest) {
+        deleteGuestNote(id as string);
         setGuestNotes(getGuestHistory());
-      }
-    } else {
-      if (window.confirm("Are you sure you want to delete this note?")) {
+      } else {
         const { error } = await supabase
           .from('notes')
           .delete()
-          .eq('id', noteId);
-        
+          .eq('id', id);
         if (!error) {
-          setNotes(notes.filter(n => n.id !== noteId));
+          setNotes(notes.filter(n => n.id !== id));
         }
       }
+    } finally {
+      setDeleteNoteId(null);
     }
   };
 
@@ -271,7 +273,8 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(note.id)}
+                        onClick={() => setDeleteNoteId(note.id)}
+                        aria-label="Delete note"
                       >
                         <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                       </Button>
@@ -339,6 +342,7 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
                           setSelectedFolder(note.folder_id?.toString() || "none");
                         }}
                         title="Move to folder"
+                        aria-label="Move to folder"
                       >
                         <FolderInput className="h-4 w-4" />
                       </Button>
@@ -347,6 +351,7 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
                         size="icon"
                         onClick={() => handleToggleShare(note.id, note.is_public || false)}
                         title={note.is_public ? "Make private" : "Make public"}
+                        aria-label={note.is_public ? "Make private" : "Make public"}
                       >
                         <Share2 className="h-4 w-4" />
                       </Button>
@@ -356,6 +361,7 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
                           size="icon"
                           onClick={() => handleCopyShareLink(note.id, note.share_id!)}
                           title="Copy share link"
+                          aria-label="Copy share link"
                         >
                           {copiedNoteId === note.id ? (
                             <Check className="h-4 w-4 text-green-500" />
@@ -367,7 +373,8 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(note.id)}
+                        onClick={() => setDeleteNoteId(note.id)}
+                        aria-label="Delete note"
                       >
                         <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                       </Button>
@@ -428,6 +435,26 @@ export default function History({ isGuest = false, selectedFolderId = null }: Hi
             </Button>
             <Button onClick={handleMoveToFolder}>
               Move Note
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteNoteId !== null} onOpenChange={() => setDeleteNoteId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Note</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. Are you sure you want to delete this note?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteNoteId(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Confirm
             </Button>
           </DialogFooter>
         </DialogContent>
