@@ -4,10 +4,18 @@ import { useEffect } from 'react';
 import i18n from '@/lib/i18n';
 import { I18nextProvider } from 'react-i18next';
 
+// The i18n instance is already initialized in lib/i18n.ts.
+// Here we just restore the user's preferred language (if any).
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
-    // Initialize i18n
-    i18n.init();
+    try {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('preferredLanguage') : null;
+      if (saved && saved !== i18n.language) {
+        i18n.changeLanguage(saved);
+      }
+    } catch {
+      // no-op
+    }
   }, []);
 
   return (

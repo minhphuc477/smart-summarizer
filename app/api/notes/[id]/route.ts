@@ -35,7 +35,7 @@ export async function PATCH(request: NextRequest, props: Params) {
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
-  const allowed = ['summary', 'original_notes', 'persona', 'folder_id', 'tags', 'sentiment', 'takeaways', 'actions', 'is_public'] as const;
+  const allowed = ['summary', 'original_notes', 'persona', 'folder_id', 'tags', 'sentiment', 'takeaways', 'actions', 'is_public', 'is_pinned'] as const;
     const updates: Record<string, any> = {};
     for (const key of allowed) if (key in body) updates[key] = body[key];
     if (Object.keys(updates).length === 0) {

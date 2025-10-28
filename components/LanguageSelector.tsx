@@ -25,19 +25,24 @@ export default function LanguageSelector() {
 
   useEffect(() => {
     // Load saved language preference
-    const savedLang = localStorage.getItem('preferredLanguage');
-    if (savedLang) {
-      i18n.changeLanguage(savedLang);
-      setCurrentLang(savedLang);
+    try {
+      const savedLang = localStorage.getItem('preferredLanguage');
+      if (savedLang && savedLang !== i18n.language) {
+        i18n.changeLanguage(savedLang);
+        setCurrentLang(savedLang);
+      }
+    } catch {
+      // ignore storage errors
     }
   }, [i18n]);
 
   const changeLanguage = async (langCode: string) => {
     await i18n.changeLanguage(langCode);
     setCurrentLang(langCode);
-    localStorage.setItem('preferredLanguage', langCode);
-    
-    // Save to backend if user is logged in
+    try {
+      localStorage.setItem('preferredLanguage', langCode);
+    } catch {}
+    // Save to backend if user is logged in (best-effort)
     try {
       await fetch('/api/user/preferences', {
         method: 'PATCH',
@@ -45,6 +50,7 @@ export default function LanguageSelector() {
         body: JSON.stringify({ language: langCode }),
       });
     } catch (error) {
+      // Non-fatal
       console.error('Error saving language preference:', error);
     }
   };

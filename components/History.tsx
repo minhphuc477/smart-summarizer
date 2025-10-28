@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Trash2, FolderInput, Share2, Copy, Check } from 'lucide-react';
+import { Trash2, FolderInput, Share2, Copy, Check, Edit, Download, Tag, X, ChevronDown, Star, Filter, Calendar } from 'lucide-react';
 import * as guestMode from '@/lib/guestMode';
 import type { GuestNote } from '@/lib/guestMode';
 import {
@@ -23,6 +23,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Tag = {
   id: number;
@@ -37,7 +43,11 @@ type Note = {
   sentiment?: string;
   folder_id?: number;
   is_public?: boolean;
+  is_pinned?: boolean;
   share_id?: string;
+  original_notes?: string;
+  takeaways?: string[];
+  actions?: any[];
   folders?: {
     id: number;
     name: string;
@@ -56,6 +66,7 @@ type Folder = {
 
 import SearchBar from './SearchBar';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 type HistoryProps = {
   isGuest?: boolean;
@@ -75,8 +86,29 @@ export default function History({ isGuest = false, selectedFolderId = null, user
   const [filterQuery, setFilterQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchInFolder, setSearchInFolder] = useState(false);
+  
+  // Filter states
+  const [sentimentFilter, setSentimentFilter] = useState<'positive' | 'neutral' | 'negative' | null>(null);
+  const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month' | null>(null);
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
+  
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const PAGE_SIZE = 10;
   const [analyzingNoteId, setAnalyzingNoteId] = useState<number | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [editNoteId, setEditNoteId] = useState<number | null>(null);
+  const [editFormData, setEditFormData] = useState<{
+    original_notes: string;
+    summary: string;
+    takeaways: string;
+    actions: string;
+  }>({ original_notes: '', summary: '', takeaways: '', actions: '' });
+  const [tagNoteId, setTagNoteId] = useState<number | null>(null);
+  const [newTagInput, setNewTagInput] = useState('');
+  const [tagSuggestions, setTagSuggestions] = useState<{ id: number; name: string }[]>([]);
 
   const getSentimentEmoji = (sentiment?: string) => {
     switch (sentiment) {
@@ -90,12 +122,37 @@ export default function History({ isGuest = false, selectedFolderId = null, user
     }
   };
 
+  // Helper function to check if note matches date filter
+  const matchesDateFilter = (createdAt: string): boolean => {
+    if (!dateFilter) return true;
+    
+    const noteDate = new Date(createdAt);
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    switch (dateFilter) {
+      case 'today':
+        return noteDate >= todayStart;
+      case 'week':
+        const weekAgo = new Date(todayStart);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        return noteDate >= weekAgo;
+      case 'month':
+        const monthAgo = new Date(todayStart);
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        return noteDate >= monthAgo;
+      default:
+        return true;
+    }
+  };
+
   useEffect(() => {
     const fetchNotes = async () => {
       if (isGuest) {
         // Guest mode: fetch from localStorage
-  setGuestNotes(guestMode.getGuestHistory());
+        setGuestNotes(guestMode.getGuestHistory());
         setLoading(false);
+        setHasMore(false); // No pagination for guest mode
       } else {
         // Logged in: fetch from Supabase
         setLoading(true);
@@ -118,7 +175,11 @@ export default function History({ isGuest = false, selectedFolderId = null, user
             sentiment,
             folder_id,
             is_public,
+            is_pinned,
             share_id,
+            original_notes,
+            takeaways,
+            actions,
             folders (
               id,
               name,
@@ -130,19 +191,25 @@ export default function History({ isGuest = false, selectedFolderId = null, user
                 name
               )
             )
-          `);
+          `, { count: 'exact' });
 
-        // Apply optional folder filter and then order
-        const query = selectedFolderId !== null
-          ? base.eq('folder_id', selectedFolderId).order('created_at', { ascending: false })
-          : base.order('created_at', { ascending: false });
-
-        const { data, error } = await query;
+        // Apply optional folder filter, pagination, and then order
+        let query = selectedFolderId !== null
+          ? base.eq('folder_id', selectedFolderId)
+          : base;
+        
+        // Apply ordering and range
+        const { data, error, count } = await query
+          .order('is_pinned', { ascending: false })
+          .order('created_at', { ascending: false })
+          .range(0, PAGE_SIZE - 1);
 
         if (error) {
           console.error("Error fetching notes:", error);
         } else {
           setNotes((data || []) as unknown as Note[]);
+          setHasMore((count || 0) > PAGE_SIZE);
+          setPage(1);
         }
         setLoading(false);
       }
@@ -150,6 +217,68 @@ export default function History({ isGuest = false, selectedFolderId = null, user
 
     fetchNotes();
   }, [isGuest, selectedFolderId]);
+
+  // Load more notes (pagination)
+  const loadMore = async () => {
+    if (isGuest || !hasMore || isLoadingMore) return;
+
+    setIsLoadingMore(true);
+    const nextPage = page + 1;
+    const from = nextPage * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    try {
+      // Build base select
+      const base = supabase
+        .from('notes')
+        .select(`
+          id, 
+          created_at, 
+          summary, 
+          persona, 
+          sentiment,
+          folder_id,
+          is_public,
+          is_pinned,
+          share_id,
+          original_notes,
+          takeaways,
+          actions,
+          folders (
+            id,
+            name,
+            color
+          ),
+          note_tags (
+            tags (
+              id,
+              name
+            )
+          )
+        `, { count: 'exact' });
+
+      // Apply optional folder filter, pagination, and order
+      let query = selectedFolderId !== null
+        ? base.eq('folder_id', selectedFolderId)
+        : base;
+      
+      // Execute query with ordering and range
+      const { data, error, count } = await query
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (error) {
+        console.error("Error loading more notes:", error);
+      } else {
+        setNotes([...notes, ...(data || []) as unknown as Note[]]);
+        setPage(nextPage);
+        setHasMore((count || 0) > (to + 1));
+      }
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   // Delete note (invoked after confirmation)
   const confirmDelete = async () => {
@@ -196,7 +325,11 @@ export default function History({ isGuest = false, selectedFolderId = null, user
           sentiment,
           folder_id,
           is_public,
+          is_pinned,
           share_id,
+          original_notes,
+          takeaways,
+          actions,
           folders (
             id,
             name,
@@ -209,7 +342,8 @@ export default function History({ isGuest = false, selectedFolderId = null, user
             )
           )
         `)
-  .order('created_at', { ascending: false });
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false });
 
       setNotes((data || []) as unknown as Note[]);
       setMoveNoteId(null);
@@ -229,7 +363,11 @@ export default function History({ isGuest = false, selectedFolderId = null, user
         sentiment,
         folder_id,
         is_public,
+        is_pinned,
         share_id,
+        original_notes,
+        takeaways,
+        actions,
         folders (
           id,
           name,
@@ -299,6 +437,191 @@ export default function History({ isGuest = false, selectedFolderId = null, user
     setTimeout(() => setCopiedNoteId(null), 2000);
   };
 
+  // Toggle pin/favorite
+  const handleTogglePin = async (noteId: number, currentIsPinned: boolean) => {
+    try {
+      const res = await fetch(`/api/notes/${noteId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_pinned: !currentIsPinned }),
+      });
+      if (!res.ok) {
+        setToast({ type: 'error', message: 'Failed to toggle pin' });
+        setTimeout(() => setToast(null), 3000);
+        return;
+      }
+      const { note } = await res.json();
+      // Update note in list and re-sort to move pinned to top
+      const updatedNotes = notes.map(n => n.id === noteId ? { ...n, is_pinned: note.is_pinned } : n);
+      // Sort: pinned first, then by created_at
+      updatedNotes.sort((a, b) => {
+        if (a.is_pinned && !b.is_pinned) return -1;
+        if (!a.is_pinned && b.is_pinned) return 1;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+      setNotes(updatedNotes);
+      setToast({ 
+        type: 'success', 
+        message: note.is_pinned ? 'Note pinned' : 'Note unpinned' 
+      });
+      setTimeout(() => setToast(null), 2000);
+    } catch (e) {
+      console.error('Error toggling pin:', e);
+      setToast({ type: 'error', message: 'Failed to toggle pin' });
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
+  // Open edit dialog
+  const handleOpenEdit = (note: Note) => {
+    setEditNoteId(note.id);
+    setEditFormData({
+      original_notes: note.original_notes || '',
+      summary: note.summary || '',
+      takeaways: (note.takeaways || []).join('\n'),
+      actions: (note.actions || []).map((a: any) => a.task || a.title || '').join('\n'),
+    });
+  };
+
+  // Save edited note
+  const handleSaveEdit = async () => {
+    if (!editNoteId) return;
+    try {
+      const takeawaysArray = editFormData.takeaways.split('\n').filter(t => t.trim());
+      const actionsArray = editFormData.actions.split('\n').filter(a => a.trim()).map(task => ({ task }));
+      
+      const res = await fetch(`/api/notes/${editNoteId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          original_notes: editFormData.original_notes,
+          summary: editFormData.summary,
+          takeaways: takeawaysArray,
+          actions: actionsArray,
+        }),
+      });
+      
+      if (!res.ok) {
+        setToast({ type: 'error', message: 'Failed to save changes' });
+        setTimeout(() => setToast(null), 3000);
+        return;
+      }
+      
+      await refreshOneNote(editNoteId);
+      setEditNoteId(null);
+      setToast({ type: 'success', message: 'Note updated successfully' });
+      setTimeout(() => setToast(null), 2500);
+    } catch (e) {
+      console.error('Edit error:', e);
+      setToast({ type: 'error', message: 'Failed to save changes' });
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
+  // Export single note
+  const handleExportNote = (note: Note, format: 'txt' | 'md') => {
+    const takeawaysText = (note.takeaways || []).map((t, i) => `${i + 1}. ${t}`).join('\n');
+    const actionsText = (note.actions || []).map((a: any, i) => `${i + 1}. ${a.task || a.title || ''}`).join('\n');
+    
+    let content = '';
+    if (format === 'md') {
+      content = `# ${note.summary}\n\n`;
+      content += `**Created:** ${new Date(note.created_at).toLocaleString()}\n\n`;
+      if (note.persona) content += `**Persona:** ${note.persona}\n\n`;
+      if (note.original_notes) content += `## Original Notes\n\n${note.original_notes}\n\n`;
+      content += `## Summary\n\n${note.summary}\n\n`;
+      if (takeawaysText) content += `## Key Takeaways\n\n${takeawaysText}\n\n`;
+      if (actionsText) content += `## Action Items\n\n${actionsText}\n\n`;
+      if (note.note_tags && note.note_tags.length > 0) {
+        content += `## Tags\n\n${note.note_tags.map(nt => `#${nt.tags.name}`).join(' ')}\n`;
+      }
+    } else {
+      content = `${note.summary}\n\n`;
+      content += `Created: ${new Date(note.created_at).toLocaleString()}\n`;
+      if (note.persona) content += `Persona: ${note.persona}\n`;
+      content += `\n---\n\n`;
+      if (note.original_notes) content += `ORIGINAL NOTES:\n${note.original_notes}\n\n`;
+      content += `SUMMARY:\n${note.summary}\n\n`;
+      if (takeawaysText) content += `KEY TAKEAWAYS:\n${takeawaysText}\n\n`;
+      if (actionsText) content += `ACTION ITEMS:\n${actionsText}\n\n`;
+      if (note.note_tags && note.note_tags.length > 0) {
+        content += `TAGS: ${note.note_tags.map(nt => nt.tags.name).join(', ')}\n`;
+      }
+    }
+    
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `note-${note.id}.${format}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Fetch tag suggestions
+  const fetchTagSuggestions = async (query: string) => {
+    try {
+      const res = await fetch(`/api/tags?q=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const { tags } = await res.json();
+        setTagSuggestions(tags || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch tags:', e);
+    }
+  };
+
+  // Add tag to note
+  const handleAddTag = async (noteId: number) => {
+    if (!newTagInput.trim()) return;
+    try {
+      const res = await fetch(`/api/notes/${noteId}/tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tagName: newTagInput.trim() }),
+      });
+      
+      if (!res.ok) {
+        setToast({ type: 'error', message: 'Failed to add tag' });
+        setTimeout(() => setToast(null), 3000);
+        return;
+      }
+      
+      await refreshOneNote(noteId);
+      setNewTagInput('');
+      setTagSuggestions([]);
+      setToast({ type: 'success', message: 'Tag added' });
+      setTimeout(() => setToast(null), 2000);
+    } catch (e) {
+      console.error('Add tag error:', e);
+      setToast({ type: 'error', message: 'Failed to add tag' });
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
+  // Remove tag from note
+  const handleRemoveTag = async (noteId: number, tagId: number) => {
+    try {
+      const res = await fetch(`/api/notes/${noteId}/tags?tagId=${tagId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!res.ok) {
+        setToast({ type: 'error', message: 'Failed to remove tag' });
+        setTimeout(() => setToast(null), 3000);
+        return;
+      }
+      
+      await refreshOneNote(noteId);
+      setToast({ type: 'success', message: 'Tag removed' });
+      setTimeout(() => setToast(null), 2000);
+    } catch (e) {
+      console.error('Remove tag error:', e);
+      setToast({ type: 'error', message: 'Failed to remove tag' });
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
   if (loading) {
     return (
       <div className="mt-10">
@@ -311,20 +634,101 @@ export default function History({ isGuest = false, selectedFolderId = null, user
   
   return (
     <div className="mt-10 relative">
-      <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h2 className="text-2xl font-bold text-foreground">
-          History{selectedFolderId !== null && !isGuest ? ' (Filtered)' : ''}
-        </h2>
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Filter by keyword..."
-            value={filterQuery}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilterQuery(e.target.value)}
-            className="w-full sm:w-64"
-          />
-          {!isGuest && userId && (
-            <Button variant="outline" onClick={() => setIsSearchOpen(true)} aria-label="Open semantic search">
-              Semantic Search
+      <div className="mb-4 flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <h2 className="text-2xl font-bold text-foreground">
+            History{selectedFolderId !== null && !isGuest ? ' (Filtered)' : ''}
+          </h2>
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Filter by keyword..."
+              value={filterQuery}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilterQuery(e.target.value)}
+              className="w-full sm:w-64"
+            />
+            {!isGuest && userId && (
+              <Button variant="outline" onClick={() => setIsSearchOpen(true)} aria-label="Open semantic search">
+                Semantic Search
+              </Button>
+            )}
+          </div>
+        </div>
+        
+        {/* Filter Bar */}
+        <div className="flex flex-wrap gap-2">
+          {/* Sentiment Filter */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Filter className="h-4 w-4 mr-2" />
+                Sentiment: {sentimentFilter ? (sentimentFilter === 'positive' ? '😊 Positive' : sentimentFilter === 'negative' ? '😞 Negative' : '😐 Neutral') : 'All'}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setSentimentFilter(null)}>
+                All Sentiments
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSentimentFilter('positive')}>
+                😊 Positive
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSentimentFilter('neutral')}>
+                😐 Neutral
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSentimentFilter('negative')}>
+                😞 Negative
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Date Range Filter */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Calendar className="h-4 w-4 mr-2" />
+                Date: {dateFilter === 'today' ? 'Today' : dateFilter === 'week' ? 'Last 7 days' : dateFilter === 'month' ? 'Last month' : 'All time'}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setDateFilter(null)}>
+                All time
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDateFilter('today')}>
+                Today
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDateFilter('week')}>
+                Last 7 days
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDateFilter('month')}>
+                Last month
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Selected Tag Filter Display */}
+          {selectedTagFilter && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setSelectedTagFilter(null)}
+              className="gap-2"
+            >
+              Tag: {selectedTagFilter}
+              <X className="h-3 w-3" />
+            </Button>
+          )}
+          
+          {/* Clear All Filters */}
+          {(sentimentFilter || dateFilter || selectedTagFilter) && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => {
+                setSentimentFilter(null);
+                setDateFilter(null);
+                setSelectedTagFilter(null);
+              }}
+            >
+              Clear filters
             </Button>
           )}
         </div>
@@ -349,22 +753,44 @@ export default function History({ isGuest = false, selectedFolderId = null, user
         {isGuest ? (
           // Guest mode
           (guestNotes.filter(n => {
+            // Keyword filter
             const q = filterQuery.trim().toLowerCase();
-            if (!q) return true;
-            return (
+            if (q && !(
               n.summary.toLowerCase().includes(q) ||
               (n.persona || '').toLowerCase().includes(q) ||
               (n.tags || []).some(t => (t || '').toLowerCase().includes(q))
-            );
+            )) return false;
+            
+            // Sentiment filter
+            if (sentimentFilter && n.sentiment !== sentimentFilter) return false;
+            
+            // Date filter
+            if (!matchesDateFilter(n.created_at)) return false;
+            
+            // Tag filter
+            if (selectedTagFilter && !(n.tags || []).includes(selectedTagFilter)) return false;
+            
+            return true;
           }).length > 0) ? (
             guestNotes.filter(n => {
+              // Keyword filter
               const q = filterQuery.trim().toLowerCase();
-              if (!q) return true;
-              return (
+              if (q && !(
                 n.summary.toLowerCase().includes(q) ||
                 (n.persona || '').toLowerCase().includes(q) ||
                 (n.tags || []).some(t => (t || '').toLowerCase().includes(q))
-              );
+              )) return false;
+              
+              // Sentiment filter
+              if (sentimentFilter && n.sentiment !== sentimentFilter) return false;
+              
+              // Date filter
+              if (!matchesDateFilter(n.created_at)) return false;
+              
+              // Tag filter
+              if (selectedTagFilter && !(n.tags || []).includes(selectedTagFilter)) return false;
+              
+              return true;
             }).map(note => (
               <Card key={note.id}>
                 <CardHeader>
@@ -399,7 +825,13 @@ export default function History({ isGuest = false, selectedFolderId = null, user
                       {note.tags.map((tag, index) => (
                         <span
                           key={`${note.id}-tag-${index}`}
-                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                          onClick={() => setSelectedTagFilter(tag)}
+                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors ${
+                            selectedTagFilter === tag
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800'
+                          }`}
+                          title={`Filter by ${tag}`}
                         >
                           #{tag}
                         </span>
@@ -415,22 +847,44 @@ export default function History({ isGuest = false, selectedFolderId = null, user
         ) : (
           // Logged in mode
           (notes.filter(n => {
+            // Keyword filter
             const q = filterQuery.trim().toLowerCase();
-            if (!q) return true;
-            return (
+            if (q && !(
               n.summary.toLowerCase().includes(q) ||
               (n.persona || '').toLowerCase().includes(q) ||
               (n.note_tags || []).some(nt => (nt.tags?.name || '').toLowerCase().includes(q))
-            );
+            )) return false;
+            
+            // Sentiment filter
+            if (sentimentFilter && n.sentiment !== sentimentFilter) return false;
+            
+            // Date filter
+            if (!matchesDateFilter(n.created_at)) return false;
+            
+            // Tag filter
+            if (selectedTagFilter && !(n.note_tags || []).some(nt => nt.tags?.name === selectedTagFilter)) return false;
+            
+            return true;
           }).length > 0) ? (
             notes.filter(n => {
+              // Keyword filter
               const q = filterQuery.trim().toLowerCase();
-              if (!q) return true;
-              return (
+              if (q && !(
                 n.summary.toLowerCase().includes(q) ||
                 (n.persona || '').toLowerCase().includes(q) ||
                 (n.note_tags || []).some(nt => (nt.tags?.name || '').toLowerCase().includes(q))
-              );
+              )) return false;
+              
+              // Sentiment filter
+              if (sentimentFilter && n.sentiment !== sentimentFilter) return false;
+              
+              // Date filter
+              if (!matchesDateFilter(n.created_at)) return false;
+              
+              // Tag filter
+              if (selectedTagFilter && !(n.note_tags || []).some(nt => nt.tags?.name === selectedTagFilter)) return false;
+              
+              return true;
             }).map(note => (
               <Card key={note.id}>
                 <CardHeader>
@@ -475,6 +929,47 @@ export default function History({ isGuest = false, selectedFolderId = null, user
                       <Button
                         variant="ghost"
                         size="icon"
+                        onClick={() => setTagNoteId(note.id)}
+                        title="Manage tags"
+                        aria-label="Manage tags"
+                      >
+                        <Tag className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleOpenEdit(note)}
+                        title="Edit note"
+                        aria-label="Edit note"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          const menu = document.createElement('div');
+                          menu.style.cssText = 'position:fixed;background:white;border:1px solid #ccc;border-radius:4px;padding:8px;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.15)';
+                          menu.innerHTML = `
+                            <button onclick="this.parentElement.remove();window.exportNote(${note.id},'txt')" style="display:block;width:100%;padding:8px;text-align:left;border:none;background:none;cursor:pointer">Export as .txt</button>
+                            <button onclick="this.parentElement.remove();window.exportNote(${note.id},'md')" style="display:block;width:100%;padding:8px;text-align:left;border:none;background:none;cursor:pointer">Export as .md</button>
+                          `;
+                          document.body.appendChild(menu);
+                          const rect = (event?.target as HTMLElement)?.getBoundingClientRect();
+                          if (rect) {
+                            menu.style.left = rect.left + 'px';
+                            menu.style.top = (rect.bottom + 4) + 'px';
+                          }
+                          (window as any).exportNote = (id: number, format: 'txt' | 'md') => handleExportNote(note, format);
+                        }}
+                        title="Export note"
+                        aria-label="Export note"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => {
                           setMoveNoteId(note.id);
                           setSelectedFolder(note.folder_id?.toString() || "none");
@@ -483,6 +978,16 @@ export default function History({ isGuest = false, selectedFolderId = null, user
                         aria-label="Move to folder"
                       >
                         <FolderInput className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant={note.is_pinned ? "default" : "ghost"}
+                        size="icon"
+                        onClick={() => handleTogglePin(note.id, note.is_pinned || false)}
+                        title={note.is_pinned ? "Unpin note" : "Pin note"}
+                        aria-label={note.is_pinned ? "Unpin note" : "Pin note"}
+                        className={note.is_pinned ? "text-yellow-500" : ""}
+                      >
+                        <Star className={`h-4 w-4 ${note.is_pinned ? 'fill-current' : ''}`} />
                       </Button>
                       <Button
                         variant={note.is_public ? "default" : "ghost"}
@@ -528,7 +1033,13 @@ export default function History({ isGuest = false, selectedFolderId = null, user
                       {note.note_tags.map((noteTag, index) => (
                         <span
                           key={`${note.id}-tag-${index}`}
-                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                          onClick={() => setSelectedTagFilter(noteTag.tags.name)}
+                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors ${
+                            selectedTagFilter === noteTag.tags.name
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800'
+                          }`}
+                          title={`Filter by ${noteTag.tags.name}`}
                         >
                           {noteTag.tags.name}
                         </span>
@@ -541,6 +1052,27 @@ export default function History({ isGuest = false, selectedFolderId = null, user
           ) : (
             <p className="text-muted-foreground">No notes yet.</p>
           )
+        )}
+        
+        {/* Load More Button */}
+        {!isGuest && !loading && hasMore && (
+          <div className="flex justify-center pt-4">
+            <Button
+              variant="outline"
+              onClick={loadMore}
+              disabled={isLoadingMore}
+              className="gap-2"
+            >
+              {isLoadingMore ? (
+                'Loading...'
+              ) : (
+                <>
+                  <ChevronDown className="h-4 w-4" />
+                  Load More
+                </>
+              )}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -597,7 +1129,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
         </DialogContent>
       </Dialog>
 
-      {/* Semantic Search Dialog */}
+            {/* Semantic Search Dialog */}
       {!isGuest && userId && (
         <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
           <DialogContent className="max-w-3xl">
@@ -624,6 +1156,170 @@ export default function History({ isGuest = false, selectedFolderId = null, user
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Edit Note Dialog */}
+      <Dialog open={editNoteId !== null} onOpenChange={() => setEditNoteId(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Note</DialogTitle>
+            <DialogDescription>
+              Make changes to your note content
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-medium">Original Notes</label>
+              <Textarea
+                value={editFormData.original_notes}
+                onChange={(e) => setEditFormData({ ...editFormData, original_notes: e.target.value })}
+                className="mt-1 min-h-[100px]"
+                placeholder="Your original notes..."
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Summary</label>
+              <Textarea
+                value={editFormData.summary}
+                onChange={(e) => setEditFormData({ ...editFormData, summary: e.target.value })}
+                className="mt-1 min-h-[80px]"
+                placeholder="Summary..."
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Key Takeaways (one per line)</label>
+              <Textarea
+                value={editFormData.takeaways}
+                onChange={(e) => setEditFormData({ ...editFormData, takeaways: e.target.value })}
+                className="mt-1 min-h-[100px]"
+                placeholder="Takeaway 1&#10;Takeaway 2&#10;..."
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Action Items (one per line)</label>
+              <Textarea
+                value={editFormData.actions}
+                onChange={(e) => setEditFormData({ ...editFormData, actions: e.target.value })}
+                className="mt-1 min-h-[100px]"
+                placeholder="Action 1&#10;Action 2&#10;..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditNoteId(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEdit}>
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tag Management Dialog */}
+      <Dialog open={tagNoteId !== null} onOpenChange={() => { setTagNoteId(null); setNewTagInput(''); setTagSuggestions([]); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Tags</DialogTitle>
+            <DialogDescription>
+              Add or remove tags for this note
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {/* Existing tags */}
+            {tagNoteId && notes.find(n => n.id === tagNoteId)?.note_tags && (
+              <div>
+                <label className="text-sm font-medium">Current Tags</label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {(notes.find(n => n.id === tagNoteId)?.note_tags || []).map((nt) => (
+                    <span
+                      key={nt.tags.id}
+                      className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800"
+                    >
+                      {nt.tags.name}
+                      <button
+                        onClick={() => handleRemoveTag(tagNoteId!, nt.tags.id)}
+                        className="hover:text-red-600 dark:hover:text-red-400"
+                        aria-label={`Remove tag ${nt.tags.name}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Add new tag */}
+            <div>
+              <label className="text-sm font-medium">Add New Tag</label>
+              <div className="relative mt-1">
+                <Input
+                  value={newTagInput}
+                  onChange={(e) => {
+                    setNewTagInput(e.target.value);
+                    if (e.target.value.trim()) {
+                      fetchTagSuggestions(e.target.value);
+                    } else {
+                      setTagSuggestions([]);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newTagInput.trim() && tagNoteId) {
+                      e.preventDefault();
+                      handleAddTag(tagNoteId);
+                    }
+                  }}
+                  placeholder="Type tag name..."
+                  className="w-full"
+                />
+                {tagSuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-40 overflow-auto">
+                    {tagSuggestions.map((tag) => (
+                      <button
+                        key={tag.id}
+                        onClick={() => {
+                          setNewTagInput(tag.name);
+                          setTagSuggestions([]);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm"
+                      >
+                        {tag.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Button
+                onClick={() => tagNoteId && handleAddTag(tagNoteId)}
+                className="mt-2 w-full"
+                disabled={!newTagInput.trim()}
+              >
+                Add Tag
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setTagNoteId(null); setNewTagInput(''); setTagSuggestions([]); }}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 ${
+            toast.type === 'success'
+              ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800'
+              : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800'
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }
+

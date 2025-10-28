@@ -2,7 +2,9 @@ import type { NextConfig } from "next";
 
 const withPWA = require('next-pwa')({
   dest: 'public',
-  disable: process.env.NODE_ENV === 'development',
+  // By default, disable PWA in dev to avoid SW caching issues.
+  // Set PWA_DEV=true to enable PWA while running `next dev`.
+  disable: process.env.NODE_ENV === 'development' && process.env.PWA_DEV !== 'true',
   register: true,
   skipWaiting: true,
 });

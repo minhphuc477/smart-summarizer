@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 
@@ -38,6 +39,7 @@ import FolderSidebar from './FolderSidebar';
 import WorkspaceManager from './WorkspaceManager';
 import { ThemeToggle } from './theme-toggle';
 import TemplateSelector from './TemplateSelector';
+import { PersonaManager } from './PersonaManager';
 import { useRouter } from 'next/navigation';
 import VoiceInputButton from './VoiceInputButton';
 import LanguageSelector from './LanguageSelector';
@@ -67,6 +69,7 @@ type SummaryResult = {
 // Component chính của ứng dụng
 export default function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode: boolean }) {
   const router = useRouter();
+  const { t } = useTranslation();
   
   // === Quản lý State ===
   const [notes, setNotes] = useState("");
@@ -241,20 +244,20 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
       {/* === Main Content === */}
       <div className="flex-1 flex flex-col items-center p-6 sm:p-12">
         {/* === Header === */}
-        <div className="w-full max-w-3xl flex justify-between items-center mb-6">
+        <div className="w-full max-w-5xl flex justify-between items-center mb-6">
             <div className="flex items-center gap-4">
               {!isGuestMode && <NavigationMenu />}
               {/* Mobile: open Folders drawer */}
               {!isGuestMode && (
                 <Button className="lg:hidden" variant="outline" onClick={() => setShowFolders(true)}>
-                  Folders
+                  {t('folders')}
                 </Button>
               )}
               <span className="text-muted-foreground text-sm hidden sm:block">
             {isGuestMode ? (
               <span className="flex items-center gap-2">
                 <AlertCircle className="h-4 w-4" />
-                Guest Mode ({remainingUses} uses left)
+                {t('guestMode')} ({remainingUses} {t('usesLeft')})
               </span>
             ) : (
               `Welcome, ${session.user.email}`
@@ -265,15 +268,16 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
             <LanguageSelector />
             <ThemeToggle />
             {!isGuestMode && (
-              <Button onClick={handleSignOut} variant="outline">Sign Out</Button>
+              <Button onClick={handleSignOut} variant="outline">{t('signOut')}</Button>
             )}
           </div>
         </div>
 
-  <div className="w-full max-w-3xl">
+  <div className="w-full max-w-5xl">
           <header className="text-center mb-10">
-            <h1 className="text-4xl font-bold text-foreground tracking-tight">Smart Note Summarizer</h1>
+            <h1 className="text-4xl font-bold text-foreground tracking-tight">{t('smartNoteSummarizer')}</h1>
             <p className="text-muted-foreground mt-2">
+              {/* Keep friendly tagline in English for now */}
               Describe an AI persona, paste your notes, and watch the magic happen.
             </p>
             {isGuestMode && (
@@ -286,30 +290,77 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
         {/* === KHU VỰC NHẬP LIỆU === */}
         <section className="mb-8 space-y-4">
           <div>
-            <label className="text-sm font-medium text-foreground">Describe AI Persona (Optional)</label>
-            <div className="flex gap-2">
-              <Input
-                type="text"
-                placeholder="e.g., A cynical pirate looking for treasure..."
-                className="flex-1"
-                value={customPersona}
-                onChange={(e) => setCustomPersona(e.target.value)}
+            <label className="text-sm font-medium text-foreground mb-2 block">
+              {t('customPersona')}
+            </label>
+            
+            {/* Persona Manager - for authenticated users */}
+            {!isGuestMode && (
+              <PersonaManager
+                currentPersona={customPersona}
+                onSelectPersona={setCustomPersona}
+                userId={session?.user?.id}
               />
-              <TemplateSelector 
-                onSelectTemplate={(template: any) => {
-                  const persona = template.persona_prompt || template.name || '';
-                  const seed = template.content || template.structure || '';
-                  setCustomPersona(persona);
-                  setNotes(seed);
-                }}
-              />
+            )}
+            
+            <div className="flex flex-wrap gap-3 mt-2 items-start">
+              <div className="flex-1 min-w-0">
+                <Input
+                  type="text"
+                  placeholder="e.g., A cynical pirate looking for treasure..."
+                  className="w-full"
+                  value={customPersona}
+                  onChange={(e) => setCustomPersona(e.target.value)}
+                />
+              </div>
+              <div className="shrink-0">
+                <TemplateSelector
+                  onSelectTemplate={(template: any) => {
+                    const persona = template.persona_prompt || template.name || '';
+                    const toMarkdown = (seed: any): string => {
+                      const tryParse = (s: string): any | null => { try { return JSON.parse(s); } catch { return null; } };
+                      const buildFromSections = (obj: any): string | null => {
+                        if (!obj) return null;
+                        const sections = Array.isArray(obj.sections) ? obj.sections : null;
+                        if (!sections) return null;
+                        const lines: string[] = [];
+                        sections.forEach((sec: any) => {
+                          const title = (sec?.title || 'Section').toString();
+                          lines.push(`## ${title}`);
+                          const fields = Array.isArray(sec?.fields) ? sec.fields : [];
+                          if (fields.length) fields.forEach((f: any) => lines.push(`- [ ] ${String(f)}`));
+                          lines.push('');
+                        });
+                        return lines.join('\n');
+                      };
+                      if (seed && typeof seed === 'object') {
+                        const md = buildFromSections(seed);
+                        return md ?? '```json\n' + JSON.stringify(seed, null, 2) + '\n```';
+                      }
+                      if (typeof seed === 'string') {
+                        const trimmed = seed.trim();
+                        const obj = tryParse(trimmed);
+                        if (obj) {
+                          const md = buildFromSections(obj);
+                          return md ?? '```json\n' + JSON.stringify(obj, null, 2) + '\n```';
+                        }
+                        return trimmed;
+                      }
+                      return '';
+                    };
+                    const rawSeed = template.content ?? template.structure ?? '';
+                    const markdownSeed = toMarkdown(rawSeed);
+                    setCustomPersona(persona);
+                    setNotes(markdownSeed);
+                  }}
+                />
+              </div>
             </div>
           </div>
-
           <div className="relative">
-             <Textarea
-                placeholder="Paste your messy notes here..."
-                className="min-h-[200px] text-base p-4"
+         <Textarea
+           placeholder={t('pasteYourNotes')}
+                className="min-h-[280px] text-base p-4 w-full"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
               />
@@ -353,7 +404,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
             disabled={isLoading || !notes.trim()}
             aria-label="Summarize"
           >
-            {isLoading ? "Processing..." : "Generate Summary"}
+            {isLoading ? "Processing..." : t('summarize')}
           </Button>
         </section>
         
@@ -434,7 +485,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
               </div>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle>Summary (TL;DR)</CardTitle>
+                  <CardTitle>{t('summary')}</CardTitle>
                   <div className="flex gap-1">
                     {isSupported && (
                       <Button 
@@ -468,7 +519,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
               {(result.tags || result.sentiment) && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Tags & Sentiment</CardTitle>
+                    <CardTitle className="text-lg">{t('tags')} & {t('sentiment')}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {/* Tags */}
@@ -504,9 +555,9 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                 </Card>
               )}
 
-              <Card>
+        <Card>
                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle>Key Takeaways</CardTitle>
+          <CardTitle>{t('keyTakeaways')}</CardTitle>
                   <div className="flex gap-1">
                     {isSupported && (
                       <Button 
@@ -540,9 +591,9 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
                 </CardContent>
               </Card>
 
-              <Card>
+        <Card>
                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle>Action Items</CardTitle>
+          <CardTitle>{t('actionItems')}</CardTitle>
                   <div className="flex gap-1">
                     {isSupported && (result.actions || []).length > 0 && (
                       <Button 
