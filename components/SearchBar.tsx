@@ -33,6 +33,17 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('recent_searches');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.slice(0, 5) : [];
+    } catch {
+      return [];
+    }
+  });
   // Debounce timer
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -64,6 +75,12 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
         throw new Error(data.error || 'Search failed');
       }
       setSearchResults(data.results || []);
+      // Save recent search
+      try {
+        const next = [query, ...recentSearches.filter(q => q !== query)].slice(0, 5);
+        setRecentSearches(next);
+        localStorage.setItem('recent_searches', JSON.stringify(next));
+      } catch {}
     } catch (err: unknown) {
       console.error('Search error:', err);
       const message = (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' && err.message !== 'Network error')
@@ -213,13 +230,16 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
       const parts = text.split(re);
       // Build a quick lookup for matches
       const matchSet = new Set(escaped.map(w => w.toLowerCase()));
-      return parts.map((part, i) => (
-        matchSet.has(part.toLowerCase()) ? (
-          <mark key={i} className="bg-yellow-200 dark:bg-yellow-600 text-inherit px-0.5 rounded-sm">{part}</mark>
-        ) : (
-          <span key={i}>{part}</span>
-        )
-      ));
+      return parts.map((part, i) => {
+        if (!part) return null; // skip empty leading/trailing segments
+        if (matchSet.has(part.toLowerCase())) {
+          return (
+            <mark key={i} className="bg-yellow-200 dark:bg-yellow-600 text-inherit px-0.5 rounded-sm">{part}</mark>
+          );
+        }
+        // Return plain text to preserve contiguous textContent for tests and a11y
+        return part;
+      });
     } catch {
       return text;
     }
@@ -237,13 +257,15 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
       </p>
 
       {/* Search Input */}
-  <form onSubmit={(e) => { e.preventDefault(); handleSearch(searchQuery); }} className="relative">
+  <form onSubmit={(e) => { e.preventDefault(); if (debounceTimer.current) clearTimeout(debounceTimer.current); handleSearch(searchQuery); }} className="relative">
         <Input
           type="text"
           placeholder="Search your notes by meaning..."
           className="w-full pr-20"
           value={searchQuery}
           onChange={handleInputChange}
+          onFocus={() => setIsInputFocused(true)}
+          onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
           ref={inputRef}
         />
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
@@ -264,15 +286,46 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
             size="sm"
             disabled={isSearching || !searchQuery.trim()}
             className="h-8"
-            onClick={(e) => {
-              e.preventDefault();
-              handleSearch(searchQuery);
-            }}
           >
             {isSearching ? "Searching..." : "Search"}
           </Button>
         </div>
       </form>
+
+      {/* Recent Searches */}
+      {isInputFocused && !searchQuery.trim() && recentSearches.length > 0 && (
+        <div className="relative">
+          <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-900 border border-border rounded-md shadow-md">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+              <span className="text-xs text-muted-foreground">Recent searches</span>
+              <button
+                className="text-xs text-blue-600 hover:underline"
+                onClick={() => {
+                  setRecentSearches([]);
+                  try { localStorage.removeItem('recent_searches'); } catch {}
+                }}
+              >
+                Clear
+              </button>
+            </div>
+            <ul className="max-h-48 overflow-auto">
+              {recentSearches.map((q, idx) => (
+                <li key={`${q}-${idx}`}>
+                  <button
+                    className="w-full text-left px-3 py-2 hover:bg-muted text-sm"
+                    onClick={() => {
+                      setSearchQuery(q);
+                      handleSearch(q);
+                    }}
+                  >
+                    {q}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
 
       {/* Error Message */}
       {error && (
@@ -303,7 +356,7 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <CardTitle className="text-base font-semibold">
-                        {highlightText(result.summary)}
+                        {result.summary}
                       </CardTitle>
                       <span className="text-xs font-medium px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full whitespace-nowrap ml-2">
                         {Math.round(result.similarity * 100)}% match
