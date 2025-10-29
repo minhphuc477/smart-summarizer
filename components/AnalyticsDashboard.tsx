@@ -8,7 +8,9 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   AreaChart, Area
 } from 'recharts';
-import { TrendingUp, FileText, Clock, Activity, Smile, Hash, Calendar as CalendarIcon } from 'lucide-react';
+import { TrendingUp, FileText, Clock, Activity, Smile, Hash, Calendar as CalendarIcon, BarChart as BarChartIcon } from 'lucide-react';
+import { EmptyState } from '@/components/EmptyState';
+import { toast } from 'sonner';
 
 type AnalyticsData = {
   analytics: Array<{
@@ -47,7 +49,7 @@ type AnalyticsData = {
   };
 };
 
-export default function AnalyticsDashboard({ userId: _userId }: { userId: string }) {
+function AnalyticsDashboard({ userId: _userId }: { userId: string }) {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState('30'); // days
@@ -59,9 +61,12 @@ export default function AnalyticsDashboard({ userId: _userId }: { userId: string
         if (response.ok) {
           const result = await response.json();
           setData(result);
+        } else {
+          toast.error('Failed to load analytics');
         }
       } catch (error) {
         console.error('Error fetching analytics:', error);
+        toast.error('Failed to load analytics');
       } finally {
         setLoading(false);
       }
@@ -80,7 +85,15 @@ export default function AnalyticsDashboard({ userId: _userId }: { userId: string
   }
 
   if (!data) {
-    return <div>No data available</div>;
+    return (
+      <div className="p-6">
+        <EmptyState
+          icon={BarChartIcon}
+          title="No analytics yet"
+          description="Use the app to create notes and summaries. Your analytics will appear here."
+        />
+      </div>
+    );
   }
 
   return (
@@ -390,5 +403,15 @@ export default function AnalyticsDashboard({ userId: _userId }: { userId: string
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+import { ErrorBoundary } from './ErrorBoundary';
+
+export default function AnalyticsDashboardWithBoundary(props: { userId: string }) {
+  return (
+    <ErrorBoundary>
+      <AnalyticsDashboard {...props} />
+    </ErrorBoundary>
   );
 }

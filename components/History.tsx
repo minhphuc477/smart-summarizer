@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase as defaultSupabase } from '@/lib/supabase';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
@@ -76,6 +76,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { EmptyState } from '@/components/EmptyState';
 import { FileQuestion } from 'lucide-react';
 import { toast } from 'sonner';
+import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts';
 
 type HistoryProps = {
   isGuest?: boolean;
@@ -84,7 +85,7 @@ type HistoryProps = {
   supabaseClient?: SupabaseClient;
 };
 
-export default function History({ isGuest = false, selectedFolderId = null, userId, supabaseClient }: HistoryProps) {
+function History({ isGuest = false, selectedFolderId = null, userId, supabaseClient }: HistoryProps) {
   const supabase = supabaseClient ?? defaultSupabase;
   const [notes, setNotes] = useState<Note[]>([]);
   const [guestNotes, setGuestNotes] = useState<GuestNote[]>([]);
@@ -97,6 +98,8 @@ export default function History({ isGuest = false, selectedFolderId = null, user
   const [filterQuery, setFilterQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchInFolder, setSearchInFolder] = useState(false);
+
+  // ...existing code...
   
   // Filter states
   const [sentimentFilter, setSentimentFilter] = useState<'positive' | 'neutral' | 'negative' | null>(null);
@@ -124,6 +127,9 @@ export default function History({ isGuest = false, selectedFolderId = null, user
   // Bulk selection state
   const [selectedNoteIds, setSelectedNoteIds] = useState<Set<number>>(new Set());
   const [bulkActionMode, setBulkActionMode] = useState(false);
+  // Keyboard navigation state (logged-in mode)
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
 
   const getSentimentEmoji = (sentiment?: string) => {
     switch (sentiment) {
@@ -138,28 +144,31 @@ export default function History({ isGuest = false, selectedFolderId = null, user
   };
 
   // Helper function to check if note matches date filter
-  const matchesDateFilter = (createdAt: string): boolean => {
+  const matchesDateFilter = useCallback((createdAt: string): boolean => {
     if (!dateFilter) return true;
-    
+
     const noteDate = new Date(createdAt);
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
+
     switch (dateFilter) {
-      case 'today':
+      case 'today': {
         return noteDate >= todayStart;
-      case 'week':
+      }
+      case 'week': {
         const weekAgo = new Date(todayStart);
         weekAgo.setDate(weekAgo.getDate() - 7);
         return noteDate >= weekAgo;
-      case 'month':
+      }
+      case 'month': {
         const monthAgo = new Date(todayStart);
         monthAgo.setMonth(monthAgo.getMonth() - 1);
         return noteDate >= monthAgo;
+      }
       default:
         return true;
     }
-  };
+  }, [dateFilter]);
 
   useEffect(() => {
     const fetchNotes = async () => {
@@ -258,13 +267,18 @@ export default function History({ isGuest = false, selectedFolderId = null, user
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isGuest, selectedFolderId]);
 
+  // Recompute focus when filters change or notes update
+  useEffect(() => {
+    setFocusedIndex(null);
+  }, [filterQuery, sentimentFilter, dateFilter, selectedTagFilter, isGuest]);
+
   // Load more notes (pagination)
   const loadMore = async () => {
     if (isGuest || !hasMore || isLoadingMore) return;
 
     setIsLoadingMore(true);
   const nextPage = page + 1;
-  const from = nextPage * PAGE_SIZE;
+  const from = page * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
     try {
@@ -343,11 +357,11 @@ export default function History({ isGuest = false, selectedFolderId = null, user
   // Delete note (invoked after confirmation)
   const confirmDelete = async () => {
     if (!deleteNoteId && deleteNoteId !== 0) return;
-    const id = deleteNoteId as number | string;
+  const id = deleteNoteId as number | string; // Ensure id is correctly typed
     try {
       if (isGuest) {
-  guestMode.deleteGuestNote(id as string);
-  setGuestNotes(guestMode.getGuestHistory());
+        guestMode.deleteGuestNote(id as string);
+        setGuestNotes(guestMode.getGuestHistory());
         toast.success('Note deleted');
       } else {
         const { error } = await supabase
@@ -500,7 +514,18 @@ export default function History({ isGuest = false, selectedFolderId = null, user
   };
 
   // Toggle pin/favorite
-  const handleTogglePin = async (noteId: number, currentIsPinned: boolean) => {
+  const handleTogglePin = useCallback(async (noteId: number, currentIsPinned: boolean) => {
+    // Optimistic UI update
+    setNotes(prev => {
+      const updated = prev.map(n => n.id === noteId ? { ...n, is_pinned: !currentIsPinned } : n);
+      updated.sort((a, b) => {
+        if (a.is_pinned && !b.is_pinned) return -1;
+        if (!a.is_pinned && b.is_pinned) return 1;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+      return updated;
+    });
+    toast.success(!currentIsPinned ? 'Note pinned' : 'Note unpinned');
     try {
       const res = await fetch(`/api/notes/${noteId}`, {
         method: 'PATCH',
@@ -509,24 +534,20 @@ export default function History({ isGuest = false, selectedFolderId = null, user
       });
       if (!res.ok) {
         toast.error('Failed to toggle pin');
+        // Revert optimistic update
+        setNotes(prev => prev.map(n => n.id === noteId ? { ...n, is_pinned: currentIsPinned } : n));
         return;
       }
       const { note } = await res.json();
-      // Update note in list and re-sort to move pinned to top
-      const updatedNotes = notes.map(n => n.id === noteId ? { ...n, is_pinned: note.is_pinned } : n);
-      // Sort: pinned first, then by created_at
-      updatedNotes.sort((a, b) => {
-        if (a.is_pinned && !b.is_pinned) return -1;
-        if (!a.is_pinned && b.is_pinned) return 1;
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      });
-      setNotes(updatedNotes);
-      toast.success(note.is_pinned ? 'Note pinned' : 'Note unpinned');
+      // Finalize state from server
+      setNotes(prev => prev.map(n => n.id === noteId ? { ...n, is_pinned: note.is_pinned } : n));
     } catch (e) {
       console.error('Error toggling pin:', e);
       toast.error('Failed to toggle pin');
+      // Revert optimistic update
+      setNotes(prev => prev.map(n => n.id === noteId ? { ...n, is_pinned: currentIsPinned } : n));
     }
-  };
+  }, []);
 
   // Open edit dialog
   const handleOpenEdit = (note: Note) => {
@@ -561,21 +582,20 @@ export default function History({ isGuest = false, selectedFolderId = null, user
         toast.error('Failed to save changes');
         return;
       }
-      
-      await refreshOneNote(editNoteId);
-      setEditNoteId(null);
-      toast.success('Note updated successfully');
     } catch (e) {
       console.error('Edit error:', e);
       toast.error('Failed to save changes');
     }
+    // Refresh the updated note and close the dialog
+    await refreshOneNote(editNoteId);
+    toast.success('Changes saved');
+    setEditNoteId(null);
   };
 
-  // Export single note
+  // Export a single note as .txt or .md
   const handleExportNote = (note: Note, format: 'txt' | 'md') => {
     const takeawaysText = (note.takeaways || []).map((t, i) => `${i + 1}. ${t}`).join('\n');
     const actionsText = (note.actions || []).map((a, i) => `${i + 1}. ${a.task || ''}`).join('\n');
-    
     let content = '';
     if (format === 'md') {
       content = `# ${note.summary}\n\n`;
@@ -601,8 +621,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
         content += `TAGS: ${note.note_tags.map(nt => nt.tags.name).join(', ')}\n`;
       }
     }
-    
-    const blob = new Blob([content], { type: 'text/plain' });
+    const blob = new Blob([content], { type: format === 'md' ? 'text/markdown' : 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -698,6 +717,25 @@ export default function History({ isGuest = false, selectedFolderId = null, user
 
   const deselectAllNotes = () => {
     setSelectedNoteIds(new Set());
+  };
+
+  // Highlight helper for filter query matches
+  const highlightText = (text: string) => {
+    const q = filterQuery.trim();
+    if (!q) return text;
+    try {
+      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const parts = text.split(new RegExp(`(${escaped})`, 'ig'));
+      return parts.map((part, i) =>
+        part.toLowerCase() === q.toLowerCase() ? (
+          <mark key={i} className="bg-yellow-200 dark:bg-yellow-600 text-inherit px-0.5 rounded-sm">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      );
+    } catch {
+      return text;
+    }
   };
 
   const handleBulkDelete = async () => {
@@ -804,6 +842,130 @@ export default function History({ isGuest = false, selectedFolderId = null, user
 
     toast.success(`${selectedNoteIds.size} note(s) exported`);
   };
+
+  // Derived filtered lists for rendering and keyboard nav
+  const filteredGuestNotes = useMemo(() => {
+    if (!isGuest) return [] as GuestNote[];
+    const q = filterQuery.trim().toLowerCase();
+    return guestNotes.filter(n => {
+      if (q && !(
+        n.summary.toLowerCase().includes(q) ||
+        (n.persona || '').toLowerCase().includes(q) ||
+        (n.tags || []).some(t => (t || '').toLowerCase().includes(q))
+      )) return false;
+      if (sentimentFilter && n.sentiment !== sentimentFilter) return false;
+      if (!matchesDateFilter(n.created_at)) return false;
+      if (selectedTagFilter && !(n.tags || []).includes(selectedTagFilter)) return false;
+      return true;
+    });
+  }, [guestNotes, isGuest, filterQuery, sentimentFilter, selectedTagFilter, matchesDateFilter]);
+
+  const filteredNotes = useMemo(() => {
+    if (isGuest) return [] as Note[];
+    const q = filterQuery.trim().toLowerCase();
+    return notes.filter(n => {
+      if (q && !(
+        n.summary.toLowerCase().includes(q) ||
+        (n.persona || '').toLowerCase().includes(q) ||
+        (n.note_tags || []).some(nt => (nt.tags?.name || '').toLowerCase().includes(q))
+      )) return false;
+      if (sentimentFilter && n.sentiment !== sentimentFilter) return false;
+      if (!matchesDateFilter(n.created_at)) return false;
+      if (selectedTagFilter && !(n.note_tags || []).some(nt => nt.tags?.name === selectedTagFilter)) return false;
+      return true;
+    });
+  }, [notes, isGuest, filterQuery, sentimentFilter, selectedTagFilter, matchesDateFilter]);
+
+  const scrollFocusedIntoView = (index: number | null) => {
+    if (index == null) return;
+    const items = document.querySelectorAll<HTMLElement>('.history-note-card');
+    const el = items.item(index);
+    el?.scrollIntoView({ block: 'nearest' });
+  };
+
+  // Keyboard shortcuts (logged-in mode only) — uses the shared hook contract
+  const shortcuts = useMemo(() => {
+    return [
+      {
+        key: 'j',
+        description: 'Next note',
+        callback: () => {
+          if (isGuest || filteredNotes.length === 0) return;
+          setBulkActionMode(false);
+          setFocusedIndex(prev => {
+            const next = prev == null ? 0 : Math.min(prev + 1, filteredNotes.length - 1);
+            queueMicrotask(() => scrollFocusedIntoView(next));
+            return next;
+          });
+        },
+      },
+      {
+        key: 'k',
+        description: 'Previous note',
+        callback: () => {
+          if (isGuest || filteredNotes.length === 0) return;
+          setBulkActionMode(false);
+          setFocusedIndex(prev => {
+            const next = prev == null ? 0 : Math.max(prev - 1, 0);
+            queueMicrotask(() => scrollFocusedIntoView(next));
+            return next;
+          });
+        },
+      },
+      {
+        key: 'Enter',
+        description: 'Open edit',
+        callback: () => {
+          if (isGuest || focusedIndex == null) return;
+          const note = filteredNotes[focusedIndex];
+          if (note) handleOpenEdit(note);
+        },
+      },
+      {
+        key: 'e',
+        description: 'Edit note',
+        callback: () => {
+          if (isGuest || focusedIndex == null) return;
+          const note = filteredNotes[focusedIndex];
+          if (note) handleOpenEdit(note);
+        },
+      },
+      {
+        key: 'p',
+        description: 'Pin/unpin',
+        callback: () => {
+          if (isGuest || focusedIndex == null) return;
+          const note = filteredNotes[focusedIndex];
+          if (note) void handleTogglePin(note.id, note.is_pinned || false);
+        },
+      },
+      {
+        key: 'Delete',
+        description: 'Delete note',
+        callback: () => {
+          if (isGuest || focusedIndex == null) return;
+          const note = filteredNotes[focusedIndex];
+          if (note) setDeleteNoteId(note.id);
+        },
+      },
+      {
+        key: 'Backspace',
+        description: 'Delete note',
+        callback: () => {
+          if (isGuest || focusedIndex == null) return;
+          const note = filteredNotes[focusedIndex];
+          if (note) setDeleteNoteId(note.id);
+        },
+      },
+      {
+        key: '?',
+        shift: true,
+        description: 'Show shortcuts',
+        callback: () => setShortcutsHelpOpen(true),
+      },
+    ];
+  }, [filteredNotes, focusedIndex, isGuest, handleTogglePin]);
+  useKeyboardShortcuts(shortcuts);
 
   if (loading) {
     return (
@@ -1000,51 +1162,13 @@ export default function History({ isGuest = false, selectedFolderId = null, user
       <div className="space-y-4">
         {isGuest ? (
           // Guest mode
-          (guestNotes.filter(n => {
-            // Keyword filter
-            const q = filterQuery.trim().toLowerCase();
-            if (q && !(
-              n.summary.toLowerCase().includes(q) ||
-              (n.persona || '').toLowerCase().includes(q) ||
-              (n.tags || []).some(t => (t || '').toLowerCase().includes(q))
-            )) return false;
-            
-            // Sentiment filter
-            if (sentimentFilter && n.sentiment !== sentimentFilter) return false;
-            
-            // Date filter
-            if (!matchesDateFilter(n.created_at)) return false;
-            
-            // Tag filter
-            if (selectedTagFilter && !(n.tags || []).includes(selectedTagFilter)) return false;
-            
-            return true;
-          }).length > 0) ? (
-            guestNotes.filter(n => {
-              // Keyword filter
-              const q = filterQuery.trim().toLowerCase();
-              if (q && !(
-                n.summary.toLowerCase().includes(q) ||
-                (n.persona || '').toLowerCase().includes(q) ||
-                (n.tags || []).some(t => (t || '').toLowerCase().includes(q))
-              )) return false;
-              
-              // Sentiment filter
-              if (sentimentFilter && n.sentiment !== sentimentFilter) return false;
-              
-              // Date filter
-              if (!matchesDateFilter(n.created_at)) return false;
-              
-              // Tag filter
-              if (selectedTagFilter && !(n.tags || []).includes(selectedTagFilter)) return false;
-              
-              return true;
-            }).map(note => (
-              <Card key={note.id}>
+          (filteredGuestNotes.length > 0) ? (
+            filteredGuestNotes.map(note => (
+              <Card key={note.id} className="history-note-card">
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <CardTitle className="text-lg">{note.summary}</CardTitle>
+                      <CardTitle className="text-lg">{highlightText(note.summary)}</CardTitle>
                       <p className="text-sm text-muted-foreground mt-1">
                         Created on {new Date(note.created_at).toLocaleDateString()}
                         {note.persona && ` using persona: "${note.persona}"`}
@@ -1098,55 +1222,18 @@ export default function History({ isGuest = false, selectedFolderId = null, user
           )
         ) : (
           // Logged in mode
-          (notes.filter(n => {
-            // Keyword filter
-            const q = filterQuery.trim().toLowerCase();
-            if (q && !(
-              n.summary.toLowerCase().includes(q) ||
-              (n.persona || '').toLowerCase().includes(q) ||
-              (n.note_tags || []).some(nt => (nt.tags?.name || '').toLowerCase().includes(q))
-            )) return false;
-            
-            // Sentiment filter
-            if (sentimentFilter && n.sentiment !== sentimentFilter) return false;
-            
-            // Date filter
-            if (!matchesDateFilter(n.created_at)) return false;
-            
-            // Tag filter
-            if (selectedTagFilter && !(n.note_tags || []).some(nt => nt.tags?.name === selectedTagFilter)) return false;
-            
-            return true;
-          }).length > 0) ? (
-            notes.filter(n => {
-              // Keyword filter
-              const q = filterQuery.trim().toLowerCase();
-              if (q && !(
-                n.summary.toLowerCase().includes(q) ||
-                (n.persona || '').toLowerCase().includes(q) ||
-                (n.note_tags || []).some(nt => (nt.tags?.name || '').toLowerCase().includes(q))
-              )) return false;
-              
-              // Sentiment filter
-              if (sentimentFilter && n.sentiment !== sentimentFilter) return false;
-              
-              // Date filter
-              if (!matchesDateFilter(n.created_at)) return false;
-              
-              // Tag filter
-              if (selectedTagFilter && !(n.note_tags || []).some(nt => nt.tags?.name === selectedTagFilter)) return false;
-              
-              return true;
-            }).map(note => (
+          (filteredNotes.length > 0) ? (
+            filteredNotes.map((note, index) => (
               <Card 
                 key={note.id} 
-                className={bulkActionMode && selectedNoteIds.has(note.id) ? 'ring-2 ring-primary' : ''}
+                className={`history-note-card ${bulkActionMode && selectedNoteIds.has(note.id) ? 'ring-2 ring-primary' : ''} ${!bulkActionMode && focusedIndex === index ? 'ring-2 ring-offset-2 ring-primary' : ''}`}
                 draggable
                 onDragStart={(e) => {
                   e.dataTransfer.setData('noteId', String(note.id));
                   e.dataTransfer.effectAllowed = 'move';
                 }}
                 style={{ cursor: 'grab' }}
+                aria-selected={!bulkActionMode && focusedIndex === index}
               >
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -1167,7 +1254,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
                       )}
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <CardTitle className="text-lg">{note.summary}</CardTitle>
+                          <CardTitle className="text-lg">{highlightText(note.summary)}</CardTitle>
                           {note.folders && (
                             <span
                               className="inline-flex items-center px-2 py-1 rounded text-xs font-medium"
@@ -1224,7 +1311,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => {
+                        onClick={(e) => {
                           const menu = document.createElement('div');
                           menu.style.cssText = 'position:fixed;background:white;border:1px solid #ccc;border-radius:4px;padding:8px;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.15)';
                           menu.innerHTML = `
@@ -1232,11 +1319,9 @@ export default function History({ isGuest = false, selectedFolderId = null, user
                             <button onclick="this.parentElement.remove();window.exportNote(${note.id},'md')" style="display:block;width:100%;padding:8px;text-align:left;border:none;background:none;cursor:pointer">Export as .md</button>
                           `;
                           document.body.appendChild(menu);
-                          const rect = (event?.target as HTMLElement)?.getBoundingClientRect();
-                          if (rect) {
-                            menu.style.left = rect.left + 'px';
-                            menu.style.top = (rect.bottom + 4) + 'px';
-                          }
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                          menu.style.left = rect.left + 'px';
+                          menu.style.top = (rect.bottom + 4) + 'px';
                             (window as Window & { exportNote?: (id: number, format: 'txt' | 'md') => void }).exportNote = (id: number, format: 'txt' | 'md') => handleExportNote(note, format);
                         }}
                         title="Export note"
@@ -1587,7 +1672,58 @@ export default function History({ isGuest = false, selectedFolderId = null, user
       </Dialog>
 
       {/* Sonner toasts are rendered globally via <Toaster /> */}
+
+      {/* Keyboard Shortcuts Help Dialog */}
+      <Dialog open={shortcutsHelpOpen} onOpenChange={setShortcutsHelpOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Keyboard Shortcuts</DialogTitle>
+            <DialogDescription>
+              Speed up navigating and managing your notes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span>J</span><span>Next note</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>K</span><span>Previous note</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Enter</span><span>Open edit</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>E</span><span>Edit note</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>P</span><span>Pin/unpin note</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Delete</span><span>Delete note</span>
+            </div>
+            <div className="flex items-center justify-between pt-2">
+              <span>Shift + ?</span><span>Show this help</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShortcutsHelpOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+import { ErrorBoundary } from './ErrorBoundary';
+
+export default function HistoryWithBoundary(props: HistoryProps) {
+  return (
+    <ErrorBoundary>
+      <History {...props} />
+    </ErrorBoundary>
+  );
+}
+;
 

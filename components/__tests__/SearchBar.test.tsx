@@ -122,7 +122,7 @@ describe('SearchBar', () => {
     });
 
     test('performs search on form submit', async () => {
-      const mockResults = [];
+      const mockResults: any[] = [];
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,

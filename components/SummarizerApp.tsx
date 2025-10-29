@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useMemo, useRef, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import type { Session } from '@supabase/supabase-js';
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { toast } from 'sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +46,7 @@ import LanguageSelector from './LanguageSelector';
 import EncryptionDialog from './EncryptionDialog';
 import NavigationMenu from './NavigationMenu';
 import GuestUpgradeDialog from './GuestUpgradeDialog';
+import { useKeyboardShortcuts, commonShortcuts } from '@/lib/useKeyboardShortcuts';
 
 // Import guest mode utilities
 // Import guest mode utilities
@@ -67,7 +69,7 @@ type SummaryResult = {
 };
 
 // Component chính của ứng dụng
-export default function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode: boolean }) {
+function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode: boolean }) {
   const router = useRouter();
   const { t } = useTranslation();
   
@@ -195,9 +197,10 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
           throw new Error(`Server responded with status: ${response.status}`);
         }
 
-        const data: SummaryResult = await response.json();
+  const data: SummaryResult = await response.json();
 
-        setResult(data);
+  setResult(data);
+  toast.success('Summary ready');
 
         // Save to localStorage
         incrementGuestUsage();
@@ -237,11 +240,12 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
         const data: SummaryResult = await response.json();
 
         setResult(data);
+        toast.success('Summary ready');
       }
 
     } catch (err) {
-
       setError("Sorry, something went wrong. Please try again.");
+      toast.error('Summarization failed');
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -289,6 +293,7 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
 
       const data: SummaryResult = await response.json();
       setResult(data);
+      toast.success('URL summarized');
 
       if (isGuestMode) {
         // Save to localStorage for guest
@@ -322,20 +327,64 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
           const savedData = await saveResponse.json();
           // Update result with database ID if needed
           setResult({ ...data, ...savedData });
+          toast.success('Saved summarized URL');
         }
       }
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to process URL. Please try again.";
       setError(errorMessage);
+      toast.error('URL summarization failed');
       console.error('URL summarization error:', err);
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Keyboard shortcuts
+  // - Ctrl+Enter or Ctrl+S: summarize/submit (when eligible)
+  // - Ctrl+N: new note (clear current input)
+  const submitRef = useRef(handleSubmit);
+  useEffect(() => {
+    submitRef.current = handleSubmit;
+  });
+
+  const shortcuts = useMemo(() => [
+    {
+      key: 'Enter',
+      ctrl: true,
+      callback: () => {
+        if (!isLoading && ((inputMode === 'text' && notes.trim()) || (inputMode === 'url' && urlInput.trim()))) {
+          submitRef.current?.();
+        }
+      },
+      description: 'Summarize',
+    },
+    {
+      ...commonShortcuts.save,
+      callback: () => {
+        if (!isLoading && ((inputMode === 'text' && notes.trim()) || (inputMode === 'url' && urlInput.trim()))) {
+          submitRef.current?.();
+        }
+      }
+    },
+    {
+      ...commonShortcuts.newNote,
+      callback: () => {
+        if (inputMode === 'text') {
+          setNotes('');
+        } else {
+          setUrlInput('');
+        }
+        setResult(null);
+        setError(null);
+      }
+    },
+  ], [inputMode, isLoading, notes, urlInput]);
+  useKeyboardShortcuts(shortcuts);
   
   return (
-    <main className="flex min-h-screen bg-background">
+    <main id="main-content" className="flex min-h-screen bg-background">
       {/* === Sidebar for Folders & Workspaces (only for logged in users) === */}
       {!isGuestMode && (
         <aside className="w-64 border-r border-border p-4 hidden lg:block space-y-6">
@@ -927,5 +976,15 @@ export default function SummarizerApp({ session, isGuestMode }: { session: Sessi
       />
     )}
     </main>
+  );
+}
+
+import { ErrorBoundary } from './ErrorBoundary';
+
+export default function SummarizerAppWithBoundary(props: { session: Session; isGuestMode: boolean }) {
+  return (
+    <ErrorBoundary>
+      <SummarizerApp {...props} />
+    </ErrorBoundary>
   );
 }

@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import ReactFlow, {
   Node,
+  Edge,
   Controls,
   Background,
   MiniMap,
@@ -15,6 +16,8 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { useKeyboardShortcuts, commonShortcuts } from '@/lib/useKeyboardShortcuts';
 import { Input } from '@/components/ui/input';
 import { Save, Plus, Download, FileJson, Share2, Image as ImageIcon } from 'lucide-react';
 import {
@@ -64,6 +67,8 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
   const [saving, setSaving] = useState(false);
   const [currentCanvasId, setCurrentCanvasId] = useState(canvasId);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const undoStack = useRef<Array<{ nodes: Node[]; edges: Edge[]; title: string }>>([]);
+  const redoStack = useRef<Array<{ nodes: Node[]; edges: Edge[]; title: string }>>([]);
 
   // Load canvas if canvasId provided
   useEffect(() => {
@@ -133,6 +138,48 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
       console.error('Error loading canvas:', error);
     }
   };
+
+  const snapshot = useCallback(() => ({
+    nodes: JSON.parse(JSON.stringify(nodes)) as Node[],
+    edges: JSON.parse(JSON.stringify(edges)) as Edge[],
+    title,
+  }), [nodes, edges, title]);
+
+  const pushUndo = useCallback(() => {
+    undoStack.current.push(snapshot());
+    // Clear redo on new action
+    redoStack.current = [];
+  }, [snapshot]);
+
+  const undo = useCallback(() => {
+    const prev = undoStack.current.pop();
+    if (!prev) return;
+    redoStack.current.push(snapshot());
+    setNodes(prev.nodes);
+    setEdges(prev.edges);
+    setTitle(prev.title);
+  }, [setEdges, setNodes, snapshot]);
+
+  const redo = useCallback(() => {
+    const next = redoStack.current.pop();
+    if (!next) return;
+    undoStack.current.push(snapshot());
+    setNodes(next.nodes);
+    setEdges(next.edges);
+    setTitle(next.title);
+  }, [setEdges, setNodes, snapshot]);
+
+  
+
+  const handleNodesChange = useCallback((changes: Parameters<typeof onNodesChange>[0]) => {
+    pushUndo();
+    onNodesChange(changes);
+  }, [onNodesChange, pushUndo]);
+
+  const handleEdgesChange = useCallback((changes: Parameters<typeof onEdgesChange>[0]) => {
+    pushUndo();
+    onEdgesChange(changes);
+  }, [onEdgesChange, pushUndo]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -320,7 +367,7 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
 
   const shareCanvas = async () => {
     if (!currentCanvasId) {
-      alert('Please save the canvas first before sharing');
+      toast.info('Please save the canvas first before sharing');
       return;
     }
 
@@ -335,12 +382,20 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
       // Copy share link
       const shareUrl = `${window.location.origin}/canvas/${currentCanvasId}`;
       await navigator.clipboard.writeText(shareUrl);
-      alert('Share link copied to clipboard!');
+      toast.success('Share link copied to clipboard');
     } catch (error) {
       console.error('Error sharing canvas:', error);
-      alert('Failed to share canvas');
+      toast.error('Failed to share canvas');
     }
   };
+
+  // Register keyboard shortcuts after functions are defined
+  useKeyboardShortcuts([
+    { ...commonShortcuts.save, callback: () => void saveCanvas() },
+    { key: 'e', ctrl: true, description: 'Export canvas', callback: exportCanvas },
+    { key: 'z', ctrl: true, description: 'Undo', callback: undo },
+    { key: 'y', ctrl: true, description: 'Redo', callback: redo },
+  ]);
 
   return (
     <div className="h-screen flex flex-col">
@@ -397,8 +452,8 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
+          onNodesChange={handleNodesChange}
+          onEdgesChange={handleEdgesChange}
           onConnect={onConnect}
           nodeTypes={nodeTypes}
           fitView
@@ -420,10 +475,20 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
 }
 
 // Wrapper component with ReactFlowProvider
-export default function CanvasEditor(props: CanvasEditorProps) {
+function CanvasEditor(props: CanvasEditorProps) {
   return (
     <ReactFlowProvider>
       <CanvasEditorInner {...props} />
     </ReactFlowProvider>
+  );
+}
+
+import { ErrorBoundary } from './ErrorBoundary';
+
+export default function CanvasEditorWithBoundary(props: CanvasEditorProps) {
+  return (
+    <ErrorBoundary>
+      <CanvasEditor {...props} />
+    </ErrorBoundary>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, X, ExternalLink, Copy, Check, Share2, Loader2, Trash2 } from "lucide-react";
 import { toast } from 'sonner';
+import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts';
+import { EmptyState } from '@/components/EmptyState';
 
 type SearchResult = {
   id: number;
@@ -25,11 +27,14 @@ type SearchBarProps = {
 
 export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  // Debounce timer
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Quick action states
   const [copiedSummaryId, setCopiedSummaryId] = useState<number | null>(null);
@@ -37,34 +42,27 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
   const [copiedShareId, setCopiedShareId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const handleSearch = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    
-    if (!searchQuery.trim()) return;
-
+  const handleSearch = async (query: string) => {
+    if (!query.trim()) return;
     setIsSearching(true);
     setError(null);
     setHasSearched(true);
-
     try {
       const response = await fetch('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: searchQuery,
+          query,
           userId: userId,
           folderId: folderId,
           matchCount: 5,
           matchThreshold: 0.75
         })
       });
-
       const data = await response.json();
-
       if (!response.ok) {
         throw new Error(data.error || 'Search failed');
       }
-
       setSearchResults(data.results || []);
     } catch (err: unknown) {
       console.error('Search error:', err);
@@ -79,12 +77,51 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
     }
   };
 
+  // Debounced search-as-you-type
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    if (value.trim()) {
+      debounceTimer.current = setTimeout(() => {
+        handleSearch(value);
+      }, 400);
+    } else {
+      setSearchResults([]);
+      setHasSearched(false);
+      setError(null);
+    }
+  };
+
   const clearSearch = () => {
     setSearchQuery("");
     setSearchResults([]);
     setHasSearched(false);
     setError(null);
   };
+
+  // Keyboard shortcuts: Ctrl+K to focus search, Escape to clear
+  const shortcuts = useMemo(() => [
+    {
+      key: 'k',
+      ctrl: true,
+      callback: () => {
+        inputRef.current?.focus();
+      },
+      description: 'Focus search',
+    },
+    {
+      key: 'Escape',
+      callback: () => {
+        if (document.activeElement === inputRef.current) {
+          clearSearch();
+          inputRef.current?.blur();
+        }
+      },
+      description: 'Clear search',
+    },
+  ], []);
+  useKeyboardShortcuts(shortcuts);
 
   // Quick action handlers
   const openInCanvas = (id: number) => {
@@ -101,6 +138,7 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
       await navigator.clipboard.writeText(text);
       setCopiedSummaryId(id);
       setTimeout(() => setCopiedSummaryId(null), 1500);
+      toast.success('Summary copied to clipboard');
     } catch (e) {
       console.error('Copy failed', e);
       toast.error('Failed to copy');
@@ -151,6 +189,7 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
 
       // Remove from search results
       setSearchResults(prev => prev.filter(r => r.id !== id));
+      toast.success('Note deleted');
     } catch (e) {
       console.error('Delete error', e);
       setError('Failed to delete note');
@@ -158,6 +197,31 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
       toast.error('Failed to delete note');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  // Highlight matched query terms in text (simple keyword-based, case-insensitive)
+  const highlightText = (text: string) => {
+    const q = searchQuery.trim();
+    if (!q) return text;
+    try {
+      // Use words >= 3 chars to avoid noisy highlighting
+      const words = Array.from(new Set(q.split(/\s+/).filter(w => w.length >= 3)));
+      const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      const pattern = escaped.length ? `(${escaped.join('|')})` : `(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`;
+      const re = new RegExp(pattern, 'ig');
+      const parts = text.split(re);
+      // Build a quick lookup for matches
+      const matchSet = new Set(escaped.map(w => w.toLowerCase()));
+      return parts.map((part, i) => (
+        matchSet.has(part.toLowerCase()) ? (
+          <mark key={i} className="bg-yellow-200 dark:bg-yellow-600 text-inherit px-0.5 rounded-sm">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      ));
+    } catch {
+      return text;
     }
   };
 
@@ -173,13 +237,14 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
       </p>
 
       {/* Search Input */}
-      <form onSubmit={handleSearch} className="relative">
+  <form onSubmit={(e) => { e.preventDefault(); handleSearch(searchQuery); }} className="relative">
         <Input
           type="text"
           placeholder="Search your notes by meaning..."
           className="w-full pr-20"
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={handleInputChange}
+          ref={inputRef}
         />
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
           {searchQuery && (
@@ -199,6 +264,10 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
             size="sm"
             disabled={isSearching || !searchQuery.trim()}
             className="h-8"
+            onClick={(e) => {
+              e.preventDefault();
+              handleSearch(searchQuery);
+            }}
           >
             {isSearching ? "Searching..." : "Search"}
           </Button>
@@ -234,7 +303,7 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <CardTitle className="text-base font-semibold">
-                        {result.summary}
+                        {highlightText(result.summary)}
                       </CardTitle>
                       <span className="text-xs font-medium px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full whitespace-nowrap ml-2">
                         {Math.round(result.similarity * 100)}% match
@@ -243,7 +312,7 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
-                      {result.original_notes}
+                      {highlightText(result.original_notes)}
                     </p>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span>
@@ -314,11 +383,11 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
               ))}
             </>
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <Search className="h-12 w-12 mx-auto mb-3 text-muted-foreground/40" />
-              <p>No results found for &quot;{searchQuery}&quot;</p>
-              <p className="text-sm mt-1">Try a different search query</p>
-            </div>
+            <EmptyState
+              icon={Search}
+              title="No results"
+              description={`No results found for "${searchQuery}". Try a different search query.`}
+            />
           )}
         </div>
       )}

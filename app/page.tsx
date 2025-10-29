@@ -34,7 +34,7 @@ export default function Home() {
     return (
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
         <ErrorBoundary>
-          <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-background">
+          <main id="main-content" className="flex min-h-screen flex-col items-center justify-center p-6 bg-background">
             <div className="absolute top-4 right-4">
               <ThemeToggle />
             </div>

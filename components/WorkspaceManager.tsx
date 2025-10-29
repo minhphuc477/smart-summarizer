@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -38,7 +39,7 @@ type WorkspaceManagerProps = {
   onWorkspaceChange: (workspaceId: string | null) => void;
 };
 
-export default function WorkspaceManager({ 
+function WorkspaceManager({ 
   selectedWorkspaceId, 
   onWorkspaceChange 
 }: WorkspaceManagerProps) {
@@ -59,6 +60,7 @@ export default function WorkspaceManager({
     } catch (err) {
       console.error('Error fetching workspaces:', err);
       setError('Failed to load workspaces');
+      toast.error('Failed to load workspaces');
     } finally {
       setLoading(false);
     }
@@ -89,9 +91,11 @@ export default function WorkspaceManager({
       setNewWorkspace({ name: '', description: '' });
       setCreateDialogOpen(false);
       setError(null);
+      toast.success('Workspace created');
     } catch (err) {
       console.error('Error creating workspace:', err);
       setError('Failed to create workspace');
+      toast.error('Failed to create workspace');
     }
   };
 
@@ -112,9 +116,11 @@ export default function WorkspaceManager({
       if (selectedWorkspaceId === workspaceId) {
         onWorkspaceChange(null);
       }
+      toast.success('Workspace deleted');
     } catch (err) {
       console.error('Error deleting workspace:', err);
       setError('Failed to delete workspace');
+      toast.error('Failed to delete workspace');
     }
   };
 
@@ -267,6 +273,16 @@ export default function WorkspaceManager({
   );
 }
 
+import { ErrorBoundary } from './ErrorBoundary';
+
+export default function WorkspaceManagerWithBoundary(props: Parameters<typeof WorkspaceManager>[0]) {
+  return (
+    <ErrorBoundary>
+      <WorkspaceManager {...props} />
+    </ErrorBoundary>
+  );
+}
+
 // Workspace Settings Dialog Component
 function WorkspaceSettings({ 
   workspaceId, 
@@ -314,6 +330,7 @@ function WorkspaceSettings({
       setPendingInvites(data.pending || []);
     } catch (err) {
       console.error('Error fetching members:', err);
+      toast.error('Failed to load members');
     }
   };
 
@@ -339,6 +356,7 @@ function WorkspaceSettings({
       
       if (!response.ok) {
         setError(data.error || 'Failed to invite member');
+        toast.error(data.error || 'Failed to invite member');
         return;
       }
 
@@ -346,9 +364,11 @@ function WorkspaceSettings({
       setError(null);
       fetchMembers();
       onUpdate();
+      toast.success('Invitation sent');
     } catch (err) {
       console.error('Error inviting member:', err);
       setError('Failed to invite member');
+      toast.error('Failed to invite member');
     }
   };
 
@@ -364,9 +384,11 @@ function WorkspaceSettings({
 
       fetchMembers();
       onUpdate();
+      toast.success('Member removed');
     } catch (err) {
       console.error('Error removing member:', err);
       setError('Failed to remove member');
+      toast.error('Failed to remove member');
     }
   };
 

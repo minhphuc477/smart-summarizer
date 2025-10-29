@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from 'sonner';
 import { Plus, Edit2, Trash2, Folder, FolderOpen } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,7 @@ export default function FolderSidebar({ userId: _userId, onFolderSelect, selecte
       }
     } catch (error) {
       console.error("Error fetching folders:", error);
+      toast.error('Failed to load folders');
     } finally {
       setIsLoading(false);
     }
@@ -95,9 +97,14 @@ export default function FolderSidebar({ userId: _userId, onFolderSelect, selecte
         setFolderName("");
         setFolderDescription("");
         setFolderColor("#3B82F6");
+        toast.success('Folder created');
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || 'Failed to create folder');
       }
     } catch (error) {
       console.error("Error creating folder:", error);
+      toast.error('Failed to create folder');
     }
   };
 
@@ -120,9 +127,14 @@ export default function FolderSidebar({ userId: _userId, onFolderSelect, selecte
         await fetchFolders();
         setIsEditDialogOpen(false);
         setSelectedFolder(null);
+        toast.success('Folder updated');
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || 'Failed to update folder');
       }
     } catch (error) {
       console.error("Error updating folder:", error);
+      toast.error('Failed to update folder');
     }
   };
 
@@ -142,9 +154,14 @@ export default function FolderSidebar({ userId: _userId, onFolderSelect, selecte
         await fetchFolders();
         setIsDeleteDialogOpen(false);
         setSelectedFolder(null);
+        toast.success('Folder deleted');
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || 'Failed to delete folder');
       }
     } catch (error) {
       console.error("Error deleting folder:", error);
+      toast.error('Failed to delete folder');
     }
   };
 
@@ -194,9 +211,14 @@ export default function FolderSidebar({ userId: _userId, onFolderSelect, selecte
       if (response.ok) {
         // Refresh folders to update note counts
         await fetchFolders();
+        toast.success(targetFolderId ? 'Note moved to folder' : 'Note moved to All Notes');
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || 'Failed to move note');
       }
     } catch (error) {
       console.error('Error moving note:', error);
+      toast.error('Failed to move note');
     }
   };
 
