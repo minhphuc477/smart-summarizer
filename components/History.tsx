@@ -1148,7 +1148,16 @@ export default function History({ isGuest = false, selectedFolderId = null, user
               
               return true;
             }).map(note => (
-              <Card key={note.id} className={bulkActionMode && selectedNoteIds.has(note.id) ? 'ring-2 ring-primary' : ''}>
+              <Card 
+                key={note.id} 
+                className={bulkActionMode && selectedNoteIds.has(note.id) ? 'ring-2 ring-primary' : ''}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('noteId', String(note.id));
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                style={{ cursor: 'grab' }}
+              >
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3 flex-1">

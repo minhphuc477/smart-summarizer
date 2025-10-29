@@ -285,7 +285,22 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
                         ) : (
                           <Share2 className="h-4 w-4 mr-1" />
                         )}
-                        Share link
+                        Share
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => deleteNote(result.id)}
+                        disabled={deletingId === result.id}
+                        title="Delete note"
+                        className="text-destructive hover:text-destructive"
+                      >
+                        {deletingId === result.id ? (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 mr-1" />
+                        )}
+                        Delete
                       </Button>
                     </div>
                   </CardContent>

@@ -67,11 +67,54 @@ export async function GET(request: NextRequest) {
       .slice(0, 10)
       .map(([name, count]) => ({ name, count }));
 
+    // Get sentiment distribution
+    const { data: notes } = await supabase
+      .from('notes')
+      .select('sentiment, created_at')
+      .eq('user_id', session.user.id)
+      .gte('created_at', new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString())
+      .order('created_at', { ascending: true });
+
+    // Calculate sentiment distribution
+    const sentimentDistribution = {
+      positive: 0,
+      neutral: 0,
+      negative: 0,
+    };
+
+    // Calculate sentiment over time (group by date)
+    const sentimentByDate: Record<string, { positive: number; neutral: number; negative: number }> = {};
+
+    (notes || []).forEach((note) => {
+      const sentiment = note.sentiment || 'neutral';
+      if (sentiment === 'positive') sentimentDistribution.positive++;
+      else if (sentiment === 'negative') sentimentDistribution.negative++;
+      else sentimentDistribution.neutral++;
+
+      // Group by date
+      const date = note.created_at.split('T')[0];
+      if (!sentimentByDate[date]) {
+        sentimentByDate[date] = { positive: 0, neutral: 0, negative: 0 };
+      }
+      if (sentiment === 'positive') sentimentByDate[date].positive++;
+      else if (sentiment === 'negative') sentimentByDate[date].negative++;
+      else sentimentByDate[date].neutral++;
+    });
+
+    const sentimentData = Object.entries(sentimentByDate)
+      .map(([date, counts]) => ({
+        date,
+        ...counts,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
     return NextResponse.json({
       analytics,
       summary,
       recentEvents,
       topTags,
+      sentimentData,
+      sentimentDistribution,
     });
   } catch (error) {
     console.error('Unexpected error:', error);

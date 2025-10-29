@@ -2,6 +2,16 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CanvasEditor from '@/components/CanvasEditor';
 import React from 'react';
 
+// Mock dropdown menu components to render content immediately
+jest.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenu: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: any) => <>{children}</>,
+  DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuItem: ({ children, onClick }: any) => (
+    <div onClick={onClick}>{children}</div>
+  ),
+}));
+
 // Mock reactflow heavy components/hooks
 jest.mock('reactflow', () => {
   const React = require('react');
@@ -16,12 +26,14 @@ jest.mock('reactflow', () => {
     const onEdgesChange = jest.fn();
     return [edges, setEdges, onEdgesChange] as const;
   };
+  const ReactFlowProvider = ({ children }: any) => <>{children}</>;
   return {
     __esModule: true,
     default: Pass,
     Controls: () => <div data-testid="controls" />,
     Background: () => <div data-testid="background" />,
     MiniMap: () => <div data-testid="minimap" />,
+    ReactFlowProvider,
     useNodesState,
     useEdgesState,
     addEdge: (conn: any, eds: any[]) => [...eds, { id: 'e1', ...conn }],
@@ -32,6 +44,7 @@ jest.mock('reactflow', () => {
 // Mock URL and anchor for export
 beforeAll(() => {
   global.URL.createObjectURL = jest.fn(() => 'blob:url') as typeof URL.createObjectURL;
+  global.URL.revokeObjectURL = jest.fn() as typeof URL.revokeObjectURL;
 });
 
 describe('CanvasEditor', () => {
@@ -74,7 +87,9 @@ describe('CanvasEditor', () => {
     const clickSpy = jest.spyOn(document, 'createElement');
     render(<CanvasEditor workspaceId="w1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+    // Click "Export as JSON" option (dropdown is mocked to render immediately)
+    const jsonOption = screen.getByText('Export as JSON');
+    fireEvent.click(jsonOption);
 
     expect(URL.createObjectURL).toHaveBeenCalled();
     expect(clickSpy).toHaveBeenCalledWith('a');

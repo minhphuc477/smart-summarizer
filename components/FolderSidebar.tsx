@@ -38,6 +38,7 @@ export default function FolderSidebar({ userId: _userId, onFolderSelect, selecte
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<FolderType | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState<number | null>(null);
   
   // Form states
   const [folderName, setFolderName] = useState("");
@@ -160,6 +161,45 @@ export default function FolderSidebar({ userId: _userId, onFolderSelect, selecte
     setIsDeleteDialogOpen(true);
   };
 
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent, folderId: number | null) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverFolderId(folderId);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverFolderId(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetFolderId: number | null) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverFolderId(null);
+
+    try {
+      // Get the note ID from the drag data
+      const noteId = e.dataTransfer.getData('noteId');
+      if (!noteId) return;
+
+      // Move the note to the target folder
+      const response = await fetch(`/api/notes/${noteId}/folder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder_id: targetFolderId }),
+      });
+
+      if (response.ok) {
+        // Refresh folders to update note counts
+        await fetchFolders();
+      }
+    } catch (error) {
+      console.error('Error moving note:', error);
+    }
+  };
+
   return (
     <div className="w-full space-y-4">
       <Card>
@@ -180,19 +220,28 @@ export default function FolderSidebar({ userId: _userId, onFolderSelect, selecte
         </CardHeader>
         <CardContent className="space-y-2">
           {/* All Notes */}
-          <button
-            onClick={() => onFolderSelect(null)}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${
-              selectedFolderId === null
-                ? "bg-accent text-accent-foreground"
-                : "hover:bg-accent/50"
+          <div
+            onDragOver={(e) => handleDragOver(e, null)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, null)}
+            className={`transition-all ${
+              dragOverFolderId === null ? 'ring-2 ring-primary ring-offset-2' : ''
             }`}
           >
-            <Folder className="h-4 w-4 flex-shrink-0" style={{ color: "#94A3B8" }} />
-            <div className="flex-1 min-w-0">
-              <div className="font-medium text-sm">All Notes</div>
-            </div>
-          </button>
+            <button
+              onClick={() => onFolderSelect(null)}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${
+                selectedFolderId === null
+                  ? "bg-accent text-accent-foreground"
+                  : "hover:bg-accent/50"
+              }`}
+            >
+              <Folder className="h-4 w-4 flex-shrink-0" style={{ color: "#94A3B8" }} />
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm">All Notes</div>
+              </div>
+            </button>
+          </div>
 
           {/* Folder List */}
           {isLoading ? (
@@ -205,10 +254,17 @@ export default function FolderSidebar({ userId: _userId, onFolderSelect, selecte
             folders.map((folder) => (
               <div
                 key={folder.id}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors group ${
+                onDragOver={(e) => handleDragOver(e, folder.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, folder.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-all group ${
                   selectedFolderId === folder.id
                     ? "bg-accent text-accent-foreground"
                     : "hover:bg-accent/50"
+                } ${
+                  dragOverFolderId === folder.id
+                    ? 'ring-2 ring-primary ring-offset-2'
+                    : ''
                 }`}
               >
                 <button

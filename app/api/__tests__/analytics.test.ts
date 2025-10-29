@@ -15,6 +15,8 @@ jest.mock('@/lib/supabase', () => {
         } as any;
       case 'note_tags':
         return { select: () => ({ limit: () => ({ data: [{ tags: { name: 'work' } }, { tags: { name: 'ideas' } }], error: null }) }) } as any;
+      case 'notes':
+        return { select: () => ({ eq: () => ({ gte: () => ({ order: () => ({ data: [{ sentiment: 'positive', created_at: '2025-01-01T00:00:00Z' }], error: null }) }) }) }) } as any;
       default:
         return { select: () => ({ data: [], error: null }) } as any;
     }

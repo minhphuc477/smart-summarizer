@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  AreaChart, Area
 } from 'recharts';
-import { TrendingUp, FileText, Clock, Activity } from 'lucide-react';
+import { TrendingUp, FileText, Clock, Activity, Smile, Hash, Calendar as CalendarIcon } from 'lucide-react';
 
 type AnalyticsData = {
   analytics: Array<{
@@ -33,6 +34,17 @@ type AnalyticsData = {
     name: string;
     count: number;
   }>;
+  sentimentData?: Array<{
+    date: string;
+    positive: number;
+    neutral: number;
+    negative: number;
+  }>;
+  sentimentDistribution?: {
+    positive: number;
+    neutral: number;
+    negative: number;
+  };
 };
 
 export default function AnalyticsDashboard({ userId: _userId }: { userId: string }) {
@@ -70,8 +82,6 @@ export default function AnalyticsDashboard({ userId: _userId }: { userId: string
   if (!data) {
     return <div>No data available</div>;
   }
-
-  const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444'];
 
   return (
     <div className="space-y-6 p-6">
@@ -208,29 +218,150 @@ export default function AnalyticsDashboard({ userId: _userId }: { userId: string
           </CardContent>
         </Card>
 
-        {/* Top Tags */}
+        {/* Sentiment Distribution */}
         <Card>
           <CardHeader>
-            <CardTitle>Top Tags</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Smile className="h-5 w-5" />
+              Sentiment Distribution
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
-                  data={data.topTags}
-                  dataKey="count"
+                  data={[
+                    { name: 'Positive', value: data.sentimentDistribution?.positive || 0, color: '#10b981' },
+                    { name: 'Neutral', value: data.sentimentDistribution?.neutral || 0, color: '#6b7280' },
+                    { name: 'Negative', value: data.sentimentDistribution?.negative || 0, color: '#ef4444' },
+                  ]}
+                  dataKey="value"
                   nameKey="name"
                   cx="50%"
                   cy="50%"
                   outerRadius={80}
-                  label={(entry) => entry.name}
+                  label={(entry) => `${entry.name}: ${entry.value}`}
                 >
-                  {data.topTags.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
+                  <Cell fill="#10b981" />
+                  <Cell fill="#6b7280" />
+                  <Cell fill="#ef4444" />
                 </Pie>
                 <Tooltip />
               </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sentiment Over Time */}
+      {data.sentimentData && data.sentimentData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Sentiment Over Time
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={data.sentimentData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={(date) => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Area 
+                  type="monotone" 
+                  dataKey="positive" 
+                  stackId="1"
+                  stroke="#10b981" 
+                  fill="#10b981"
+                  fillOpacity={0.6}
+                  name="Positive"
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="neutral" 
+                  stackId="1"
+                  stroke="#6b7280" 
+                  fill="#6b7280"
+                  fillOpacity={0.6}
+                  name="Neutral"
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="negative" 
+                  stackId="1"
+                  stroke="#ef4444" 
+                  fill="#ef4444"
+                  fillOpacity={0.6}
+                  name="Negative"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tags and Productivity Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top Tags */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Hash className="h-5 w-5" />
+              Top Tags
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data.topTags && data.topTags.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={data.topTags.slice(0, 8)} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" />
+                  <YAxis dataKey="name" type="category" width={100} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#8b5cf6" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                No tags yet
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Productivity Heatmap - Words per day */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5" />
+              Words Processed Daily
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={data.analytics}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={(date) => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                />
+                <YAxis />
+                <Tooltip />
+                <Area 
+                  type="monotone" 
+                  dataKey="words_processed" 
+                  stroke="#f59e0b" 
+                  fill="#f59e0b"
+                  fillOpacity={0.6}
+                  name="Words"
+                />
+              </AreaChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>

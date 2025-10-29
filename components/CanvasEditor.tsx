@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import ReactFlow, {
   Node,
   Controls,
@@ -11,11 +11,18 @@ import ReactFlow, {
   addEdge,
   Connection,
   BackgroundVariant,
+  ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Save, Plus, Download } from 'lucide-react';
+import { Save, Plus, Download, FileJson, Share2, Image as ImageIcon } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type CanvasEditorProps = {
   canvasId?: string;
@@ -50,12 +57,13 @@ const nodeTypes = {
   // Custom node types can be added here
 };
 
-export default function CanvasEditor({ canvasId, workspaceId, onSave }: CanvasEditorProps) {
+function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [title, setTitle] = useState('Untitled Canvas');
   const [saving, setSaving] = useState(false);
   const [currentCanvasId, setCurrentCanvasId] = useState(canvasId);
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   // Load canvas if canvasId provided
   useEffect(() => {
@@ -219,6 +227,119 @@ export default function CanvasEditor({ canvasId, workspaceId, onSave }: CanvasEd
     link.href = url;
     link.download = `${title}.json`;
     link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportAsPNG = async () => {
+    if (!canvasRef.current) return;
+    
+    try {
+      // Get the ReactFlow viewport element
+      const viewport = canvasRef.current.querySelector('.react-flow__viewport') as HTMLElement;
+      if (!viewport) return;
+
+      // Create a canvas from the viewport
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Set canvas size based on viewport
+      const bounds = viewport.getBoundingClientRect();
+      canvas.width = bounds.width;
+      canvas.height = bounds.height;
+
+      // Fill with white background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Convert to data URL
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${title}.png`;
+          link.click();
+          URL.revokeObjectURL(url);
+        }
+      });
+    } catch (error) {
+      console.error('Error exporting as PNG:', error);
+    }
+  };
+
+  const exportAsSVG = () => {
+    // Create SVG from nodes and edges data
+    const svgContent = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800">
+        <rect width="100%" height="100%" fill="#ffffff"/>
+        ${nodes.map(node => `
+          <g transform="translate(${node.position.x}, ${node.position.y})">
+            <rect width="${node.style?.width || 200}" height="${node.style?.height || 150}" 
+                  fill="${node.style?.backgroundColor || '#fef3c7'}" 
+                  stroke="${node.data.borderColor || '#fbbf24'}" 
+                  stroke-width="2" rx="8"/>
+            <text x="10" y="30" font-family="Arial" font-size="14" fill="${node.data.color || '#000'}">
+              ${node.data.label}
+            </text>
+          </g>
+        `).join('')}
+        ${edges.map(edge => {
+          const sourceNode = nodes.find(n => n.id === edge.source);
+          const targetNode = nodes.find(n => n.id === edge.target);
+          if (!sourceNode || !targetNode) return '';
+          
+          const sx = sourceNode.position.x + ((sourceNode.style?.width as number) || 200) / 2;
+          const sy = sourceNode.position.y + ((sourceNode.style?.height as number) || 150) / 2;
+          const tx = targetNode.position.x + ((targetNode.style?.width as number) || 200) / 2;
+          const ty = targetNode.position.y + ((targetNode.style?.height as number) || 150) / 2;
+          
+          return `
+            <line x1="${sx}" y1="${sy}" x2="${tx}" y2="${ty}" 
+                  stroke="${edge.style?.stroke || '#94a3b8'}" 
+                  stroke-width="2" 
+                  marker-end="url(#arrowhead)"/>
+          `;
+        }).join('')}
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+            <polygon points="0 0, 10 3, 0 6" fill="#94a3b8" />
+          </marker>
+        </defs>
+      </svg>
+    `.trim();
+
+    const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${title}.svg`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const shareCanvas = async () => {
+    if (!currentCanvasId) {
+      alert('Please save the canvas first before sharing');
+      return;
+    }
+
+    try {
+      // Make canvas public
+      await fetch(`/api/canvases/${currentCanvasId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_public: true }),
+      });
+
+      // Copy share link
+      const shareUrl = `${window.location.origin}/canvas/${currentCanvasId}`;
+      await navigator.clipboard.writeText(shareUrl);
+      alert('Share link copied to clipboard!');
+    } catch (error) {
+      console.error('Error sharing canvas:', error);
+      alert('Failed to share canvas');
+    }
   };
 
   return (
@@ -240,15 +361,39 @@ export default function CanvasEditor({ canvasId, workspaceId, onSave }: CanvasEd
             <Save className="h-4 w-4 mr-2" />
             {saving ? 'Saving...' : 'Save'}
           </Button>
-          <Button onClick={exportCanvas} variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Export
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={exportAsPNG}>
+                <ImageIcon className="h-4 w-4 mr-2" />
+                Export as PNG
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportAsSVG}>
+                <ImageIcon className="h-4 w-4 mr-2" />
+                Export as SVG
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportCanvas}>
+                <FileJson className="h-4 w-4 mr-2" />
+                Export as JSON
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          <Button onClick={shareCanvas} variant="outline" size="sm">
+            <Share2 className="h-4 w-4 mr-2" />
+            Share
           </Button>
         </div>
       </div>
 
       {/* Canvas */}
-      <div className="flex-1">
+      <div className="flex-1" ref={canvasRef}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -271,5 +416,14 @@ export default function CanvasEditor({ canvasId, workspaceId, onSave }: CanvasEd
         <span className="ml-auto">Drag to create • Click to edit • Connect nodes</span>
       </div>
     </div>
+  );
+}
+
+// Wrapper component with ReactFlowProvider
+export default function CanvasEditor(props: CanvasEditorProps) {
+  return (
+    <ReactFlowProvider>
+      <CanvasEditorInner {...props} />
+    </ReactFlowProvider>
   );
 }

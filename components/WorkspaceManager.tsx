@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Users, Settings, Trash2, UserPlus } from "lucide-react";
+import { Plus, Users, Settings, Trash2, UserPlus, Crown, Shield, User, Mail, MailCheck } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type Workspace = {
@@ -150,7 +150,9 @@ export default function WorkspaceManager({
             {workspaces.map((workspace) => (
               <SelectItem key={workspace.id} value={workspace.id}>
                 <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
+                  {workspace.role === 'owner' && <Crown className="h-4 w-4 text-yellow-500" />}
+                  {workspace.role === 'admin' && <Shield className="h-4 w-4 text-blue-500" />}
+                  {workspace.role === 'member' && <Users className="h-4 w-4" />}
                   <span>{workspace.name}</span>
                   <span className="text-xs text-muted-foreground">
                     ({workspace.member_count} members)
@@ -220,23 +222,42 @@ export default function WorkspaceManager({
 
       {/* Current Workspace Info */}
       {selectedWorkspaceId && (
-        <div className="p-4 bg-muted rounded-lg">
+        <div className="p-4 bg-gradient-to-br from-primary/5 to-primary/10 rounded-lg border border-primary/20">
           {workspaces.find(w => w.id === selectedWorkspaceId) && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="font-medium text-foreground">
-                  {workspaces.find(w => w.id === selectedWorkspaceId)?.name}
-                </h3>
-                <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
+                <div className="flex items-center gap-2">
+                  {workspaces.find(w => w.id === selectedWorkspaceId)?.role === 'owner' && (
+                    <Crown className="h-5 w-5 text-yellow-500" />
+                  )}
+                  {workspaces.find(w => w.id === selectedWorkspaceId)?.role === 'admin' && (
+                    <Shield className="h-5 w-5 text-blue-500" />
+                  )}
+                  {workspaces.find(w => w.id === selectedWorkspaceId)?.role === 'member' && (
+                    <User className="h-5 w-5 text-gray-500" />
+                  )}
+                  <h3 className="font-semibold text-foreground">
+                    {workspaces.find(w => w.id === selectedWorkspaceId)?.name}
+                  </h3>
+                </div>
+                <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full font-medium uppercase">
                   {workspaces.find(w => w.id === selectedWorkspaceId)?.role}
                 </span>
               </div>
               <p className="text-sm text-muted-foreground">
                 {workspaces.find(w => w.id === selectedWorkspaceId)?.description || 'No description'}
               </p>
-              <div className="flex gap-4 text-xs text-muted-foreground">
-                <span>👥 {workspaces.find(w => w.id === selectedWorkspaceId)?.member_count} members</span>
-                <span>📝 {workspaces.find(w => w.id === selectedWorkspaceId)?.note_count} notes</span>
+              <div className="flex gap-4 text-xs font-medium">
+                <span className="flex items-center gap-1">
+                  <Users className="h-3 w-3" />
+                  {workspaces.find(w => w.id === selectedWorkspaceId)?.member_count} members
+                </span>
+                <span className="flex items-center gap-1">
+                  📝 {workspaces.find(w => w.id === selectedWorkspaceId)?.note_count} notes
+                </span>
+                <span className="flex items-center gap-1">
+                  📁 {workspaces.find(w => w.id === selectedWorkspaceId)?.folder_count} folders
+                </span>
               </div>
             </div>
           )}
@@ -264,11 +285,24 @@ function WorkspaceSettings({
     id: string;
     role: string;
     user_id: string;
+    status?: 'active' | 'pending';
     user?: { email?: string } | null;
   };
   const [members, setMembers] = useState<Member[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<{ email: string; role: string; created_at: string }[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case 'owner':
+        return <Crown className="h-4 w-4 text-yellow-500" />;
+      case 'admin':
+        return <Shield className="h-4 w-4 text-blue-500" />;
+      default:
+        return <User className="h-4 w-4 text-gray-500" />;
+    }
+  };
 
   const fetchMembers = async () => {
     try {
@@ -277,6 +311,7 @@ function WorkspaceSettings({
       
       const data = await response.json();
       setMembers(data.members || []);
+      setPendingInvites(data.pending || []);
     } catch (err) {
       console.error('Error fetching members:', err);
     }
@@ -394,23 +429,78 @@ function WorkspaceSettings({
               )}
 
               <div className="space-y-2">
+                <h3 className="text-sm font-medium text-foreground mb-3">
+                  Active Members ({members.length})
+                </h3>
                 {members.map((member) => (
-                  <div key={member.id} className="flex items-center justify-between p-2 border rounded">
-                    <div>
-                      <div className="font-medium">{member.user?.email || 'Unknown'}</div>
-                      <div className="text-xs text-muted-foreground">{member.role}</div>
+                  <div key={member.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
+                        {getRoleIcon(member.role)}
+                      </div>
+                      <div>
+                        <div className="font-medium text-foreground">{member.user?.email || 'Unknown'}</div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span className="capitalize">{member.role}</span>
+                          {member.role === 'owner' && (
+                            <span className="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded-full text-xs font-medium">
+                              Owner
+                            </span>
+                          )}
+                          {member.role === 'admin' && (
+                            <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full text-xs font-medium">
+                              Admin
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                     {isOwnerOrAdmin && member.role !== 'owner' && (
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleRemoveMember(member.user_id)}
+                        className="text-destructive hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
                 ))}
+                
+                {/* Pending Invitations */}
+                {pendingInvites.length > 0 && (
+                  <>
+                    <h3 className="text-sm font-medium text-foreground mt-6 mb-3">
+                      Pending Invitations ({pendingInvites.length})
+                    </h3>
+                    {pendingInvites.map((invite, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 border border-dashed rounded-lg bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800">
+                            <Mail className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                          <div>
+                            <div className="font-medium text-foreground">{invite.email}</div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <MailCheck className="h-3 w-3" />
+                              <span>Invited {new Date(invite.created_at).toLocaleDateString()}</span>
+                              <span>·</span>
+                              <span className="capitalize">{invite.role}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+                
+                {members.length === 0 && pendingInvites.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="h-12 w-12 mx-auto mb-2 text-muted-foreground/40" />
+                    <p>No members yet</p>
+                  </div>
+                )}
               </div>
             </div>
           )}

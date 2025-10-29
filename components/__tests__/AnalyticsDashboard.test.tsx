@@ -11,6 +11,7 @@ jest.mock('recharts', () => {
     LineChart: Pass,
     BarChart: Pass,
     PieChart: Pass,
+    AreaChart: Pass,
     CartesianGrid: Pass,
     XAxis: Pass,
     YAxis: Pass,
@@ -20,6 +21,7 @@ jest.mock('recharts', () => {
     Bar: Pass,
     Pie: Pass,
     Cell: Pass,
+    Area: Pass,
   };
 });
 
@@ -42,6 +44,14 @@ describe('AnalyticsDashboard', () => {
       { name: 'work', count: 3 },
       { name: 'ideas', count: 2 },
     ],
+    sentimentData: [
+      { date: new Date().toISOString().split('T')[0], positive: 5, neutral: 3, negative: 2 },
+    ],
+    sentimentDistribution: {
+      positive: 5,
+      neutral: 3,
+      negative: 2,
+    },
   };
 
   beforeEach(() => {

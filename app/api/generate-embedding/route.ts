@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { pipeline } from '@xenova/transformers';
+import { pipeline, FeatureExtractionPipeline } from '@xenova/transformers';
 
 // Tạo Supabase client cho server-side
 const supabase = createClient(
@@ -9,17 +9,12 @@ const supabase = createClient(
 );
 
 // Cache the embedding pipeline
-type FeatureExtractionPipeline = (
-  text: string,
-  options?: { pooling?: string; normalize?: boolean }
-) => Promise<{ data: Float32Array }>;
-
 let embedder: FeatureExtractionPipeline | null = null;
 
 async function getEmbedder() {
   if (!embedder) {
     // Load the model once and cache it
-    embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+    embedder = (await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2')) as FeatureExtractionPipeline;
   }
   return embedder;
 }
@@ -37,7 +32,7 @@ export async function POST(req: Request) {
     // 1. Tạo embedding bằng Transformers.js (local, free)
     const pipe = await getEmbedder();
     const output = await pipe(text.substring(0, 5000), {
-      pooling: 'mean',
+      pooling: 'mean' as const,
       normalize: true,
     });
 

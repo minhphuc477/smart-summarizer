@@ -1,22 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabaseServer';
-import { pipeline } from '@xenova/transformers';
+import { pipeline, FeatureExtractionPipeline } from '@xenova/transformers';
 import { createRequestLogger } from '@/lib/logger';
 
 // Tạo Supabase client cho server-side
 const supabase = getServerSupabase();
 
 // Cache the embedding pipeline
-type FeatureExtractionPipeline = (
-  text: string,
-  options?: { pooling?: string; normalize?: boolean }
-) => Promise<{ data: Float32Array }>;
-
 let embedder: FeatureExtractionPipeline | null = null;
 
 async function getEmbedder() {
   if (!embedder) {
-    embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+    embedder = (await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2')) as FeatureExtractionPipeline;
   }
   return embedder;
 }
@@ -44,7 +39,7 @@ export async function POST(req: Request) {
     const embeddingStart = Date.now();
     const pipe = await getEmbedder();
     const output = await pipe(query.trim(), {
-      pooling: 'mean',
+      pooling: 'mean' as const,
       normalize: true,
     });
 
