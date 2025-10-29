@@ -16,7 +16,6 @@ describe('i18n (Internationalization)', () => {
   });
 
   test('all languages have same translation keys', () => {
-    const languages = i18n.languages || ['en', 'vi'];
     const enBundle = i18n.getResourceBundle('en', 'translation');
     
     expect(enBundle).toBeDefined();

@@ -78,8 +78,8 @@ export async function PATCH(request: NextRequest, props: Params) {
       }
     }
 
-    // Build update object
-    const updates: any = {};
+  // Build update object
+  const updates: Record<string, unknown> = {};
     if (name !== undefined) updates.name = name.trim();
     if (description !== undefined) updates.description = description?.trim() || null;
     if (color !== undefined) updates.color = color;

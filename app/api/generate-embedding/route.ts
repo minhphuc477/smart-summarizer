@@ -9,7 +9,12 @@ const supabase = createClient(
 );
 
 // Cache the embedding pipeline
-let embedder: any = null;
+type FeatureExtractionPipeline = (
+  text: string,
+  options?: { pooling?: string; normalize?: boolean }
+) => Promise<{ data: Float32Array }>;
+
+let embedder: FeatureExtractionPipeline | null = null;
 
 async function getEmbedder() {
   if (!embedder) {
@@ -58,11 +63,13 @@ export async function POST(req: Request) {
       message: "Embedding generated and saved successfully (using local model)." 
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in /api/generate-embedding:", error);
     return NextResponse.json({ 
       success: false,
-      error: error.message || "Failed to generate embedding." 
+      error: (error && typeof error === 'object' && 'message' in error && typeof (error as { message: unknown }).message === 'string')
+        ? (error as { message: string }).message
+        : "Failed to generate embedding." 
     }, { status: 500 });
   }
 }

@@ -19,7 +19,7 @@ export interface LogContext {
   method?: string;
   ip?: string;
   userAgent?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface LogEntry {
@@ -33,7 +33,7 @@ export interface LogEntry {
     stack?: string;
   };
   duration?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 class Logger {
@@ -59,7 +59,7 @@ class Logger {
     return JSON.stringify(entry);
   }
 
-  private log(level: LogLevel, message: string, context?: LogContext, metadata?: Record<string, any>) {
+  private log(level: LogLevel, message: string, context?: LogContext, metadata?: Record<string, unknown>) {
     if (!this.shouldLog(level)) return;
 
     const entry: LogEntry = {
@@ -88,19 +88,19 @@ class Logger {
     }
   }
 
-  debug(message: string, context?: LogContext, metadata?: Record<string, any>) {
+  debug(message: string, context?: LogContext, metadata?: Record<string, unknown>) {
     this.log('DEBUG', message, context, metadata);
   }
 
-  info(message: string, context?: LogContext, metadata?: Record<string, any>) {
+  info(message: string, context?: LogContext, metadata?: Record<string, unknown>) {
     this.log('INFO', message, context, metadata);
   }
 
-  warn(message: string, context?: LogContext, metadata?: Record<string, any>) {
+  warn(message: string, context?: LogContext, metadata?: Record<string, unknown>) {
     this.log('WARN', message, context, metadata);
   }
 
-  error(message: string, error?: Error, context?: LogContext, metadata?: Record<string, any>) {
+  error(message: string, error?: Error, context?: LogContext, metadata?: Record<string, unknown>) {
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level: 'ERROR',
@@ -256,7 +256,7 @@ export function createRequestLogger(req: Request): Logger {
  */
 export function logDatabaseQuery(
   query: string,
-  params?: any[],
+  params?: unknown[],
   duration?: number
 ) {
   logger.debug('Database query', undefined, {

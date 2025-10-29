@@ -14,19 +14,6 @@ export function useSpeech() {
 
     const synth = window.speechSynthesis;
 
-    const handleEnd = () => {
-      setSpeechState('idle');
-      setIsPaused(false);
-    };
-
-    const handlePause = () => {
-      setIsPaused(true);
-    };
-
-    const handleResume = () => {
-      setIsPaused(false);
-    };
-
     // Cleanup khi component unmount
     return () => {
       synth.cancel();

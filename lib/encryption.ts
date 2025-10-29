@@ -54,7 +54,7 @@ export function decryptText(
     });
     
     return decrypted.toString(CryptoJS.enc.Utf8);
-  } catch (error) {
+  } catch {
     throw new Error('Decryption failed. Wrong password or corrupted data.');
   }
 }
@@ -108,7 +108,7 @@ export function generateEncryptionKey(): string {
 }
 
 // Encrypt object (for storing structured data)
-export function encryptObject(obj: any, password: string): {
+export function encryptObject(obj: unknown, password: string): {
   encrypted: string;
   iv: string;
   salt: string;
@@ -118,14 +118,14 @@ export function encryptObject(obj: any, password: string): {
 }
 
 // Decrypt object
-export function decryptObject(
+export function decryptObject<T = unknown>(
   encryptedText: string,
   password: string,
   iv: string,
   salt: string
-): any {
+): T {
   const decrypted = decryptText(encryptedText, password, iv, salt);
-  return JSON.parse(decrypted);
+  return JSON.parse(decrypted) as T;
 }
 
 // Client-side encryption utilities

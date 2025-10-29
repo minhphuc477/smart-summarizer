@@ -31,8 +31,7 @@ jest.mock('reactflow', () => {
 
 // Mock URL and anchor for export
 beforeAll(() => {
-  // @ts-ignore
-  global.URL.createObjectURL = jest.fn(() => 'blob:url');
+  global.URL.createObjectURL = jest.fn(() => 'blob:url') as typeof URL.createObjectURL;
 });
 
 describe('CanvasEditor', () => {

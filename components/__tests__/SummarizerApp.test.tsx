@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import SummarizerApp from '../SummarizerApp';
+import type { Session } from '@supabase/supabase-js';
 
 // Mock Next.js App Router
 jest.mock('next/navigation', () => ({
@@ -11,6 +12,35 @@ jest.mock('next/navigation', () => ({
     prefetch: jest.fn(),
     back: jest.fn(),
     forward: jest.fn(),
+  }),
+}));
+
+// Mock i18next to return simple English translations
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        smartNoteSummarizer: 'Smart Note Summarizer',
+        pasteYourNotes: 'Paste your messy notes',
+        customPersona: 'Custom AI Persona (optional)',
+        summarize: 'Summarize',
+        summary: 'Summary',
+        keyTakeaways: 'Key Takeaways',
+        actionItems: 'Action Items',
+        tags: 'Tags',
+        sentiment: 'Sentiment',
+        guestMode: 'Guest Mode',
+        usesLeft: 'uses left',
+        signIn: 'Sign In',
+        signOut: 'Sign Out',
+        folders: 'folders',
+      };
+      return translations[key] || key;
+    },
+    i18n: {
+      changeLanguage: jest.fn(),
+      language: 'en',
+    },
   }),
 }));
 
@@ -38,7 +68,7 @@ jest.mock('../SearchBar', () => {
 });
 
 jest.mock('../FolderSidebar', () => {
-  return function MockFolderSidebar({ onFolderSelect }: any) {
+  return function MockFolderSidebar({ onFolderSelect }: { onFolderSelect: (id: number) => void }) {
     return (
       <div data-testid="folder-sidebar">
         <button onClick={() => onFolderSelect(1)}>Select Folder</button>
@@ -48,7 +78,7 @@ jest.mock('../FolderSidebar', () => {
 });
 
 jest.mock('../WorkspaceManager', () => {
-  return function MockWorkspaceManager({ onWorkspaceChange }: any) {
+  return function MockWorkspaceManager({ onWorkspaceChange }: { onWorkspaceChange: (id: string) => void }) {
     return (
       <div data-testid="workspace-manager">
         <button onClick={() => onWorkspaceChange('ws-1')}>Select Workspace</button>
@@ -110,13 +140,27 @@ jest.mock('@/lib/supabase', () => ({
   },
 }));
 
+// Mock PersonaManager to avoid fetch calls during tests
+jest.mock('../PersonaManager', () => ({
+  PersonaManager: ({ onSelectPersona }: { onSelectPersona: (p: string) => void }) => (
+    <div data-testid="persona-manager">
+      <button onClick={() => onSelectPersona('Test Persona')}>Select Persona</button>
+    </div>
+  ),
+}));
+
 describe('SummarizerApp', () => {
   const mockSession = {
     user: {
       id: 'user-123',
       email: 'test@example.com',
     },
-  } as any;
+      access_token: 'mock-token',
+      refresh_token: 'mock-refresh-token',
+      expires_in: 3600,
+      token_type: 'bearer',
+      expires_at: Date.now() + 3600,
+    } as Session;
 
   beforeEach(() => {
     global.fetch = jest.fn();
@@ -243,10 +287,15 @@ describe('SummarizerApp', () => {
         actions: [],
       };
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({}), // For background embedding call
+        });
 
       render(<SummarizerApp session={mockSession} isGuestMode={false} />);
       
@@ -320,10 +369,15 @@ describe('SummarizerApp', () => {
         sentiment: 'positive',
       };
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({}), // For background embedding call
+        });
 
       render(<SummarizerApp session={mockSession} isGuestMode={false} />);
       
@@ -351,10 +405,15 @@ describe('SummarizerApp', () => {
         sentiment: 'positive',
       };
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({}), // For background embedding call
+        });
 
       render(<SummarizerApp session={mockSession} isGuestMode={false} />);
       
@@ -417,10 +476,15 @@ describe('SummarizerApp', () => {
         actions: [],
       };
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({}), // For background embedding call
+        });
 
       render(<SummarizerApp session={mockSession} isGuestMode={false} />);
       

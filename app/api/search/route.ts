@@ -7,7 +7,12 @@ import { createRequestLogger } from '@/lib/logger';
 const supabase = getServerSupabase();
 
 // Cache the embedding pipeline
-let embedder: any = null;
+type FeatureExtractionPipeline = (
+  text: string,
+  options?: { pooling?: string; normalize?: boolean }
+) => Promise<{ data: Float32Array }>;
+
+let embedder: FeatureExtractionPipeline | null = null;
 
 async function getEmbedder() {
   if (!embedder) {
@@ -52,7 +57,7 @@ export async function POST(req: Request) {
     const searchStart = Date.now();
     const useFolderRpc = folderId !== null && folderId !== undefined;
     const procName = useFolderRpc ? 'match_notes_by_folder' : 'match_notes';
-    const rpcArgs: any = {
+    const rpcArgs: Record<string, unknown> = {
       query_embedding: queryEmbedding,
       match_threshold: matchThreshold,
       match_count: matchCount,
@@ -89,13 +94,15 @@ export async function POST(req: Request) {
       count: results.length 
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     const totalDuration = Date.now() - startTime;
-    logger.error("Error in /api/search", error);
+    logger.error("Error in /api/search", error as Error);
     logger.logResponse('POST', '/api/search', 500, totalDuration);
     
     return NextResponse.json({ 
-      error: error.message || "Failed to process search request." 
+      error: (error && typeof error === 'object' && 'message' in error && typeof (error as { message: unknown }).message === 'string')
+        ? (error as { message: string }).message
+        : "Failed to process search request." 
     }, { status: 500 });
   }
 }

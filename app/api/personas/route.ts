@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabaseServer';
 
 // GET /api/personas - Fetch all personas for the authenticated user
-export async function GET(request: NextRequest) {
+export async function GET(_request: Request) {
   try {
     const supabase = getServerSupabase();
 

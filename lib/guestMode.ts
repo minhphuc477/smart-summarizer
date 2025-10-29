@@ -142,8 +142,8 @@ export function getGuestHistory(): GuestNote[] {
 }
 
 // Check if user is guest (không có session)
-export function isGuestMode(session: any): boolean {
-  return !session || !session.user;
+export function isGuestMode(session: { user?: unknown } | null | undefined): boolean {
+  return !session || !('user' in session) || !session.user;
 }
 
 // Constants để export

@@ -130,12 +130,13 @@ export async function GET() {
     }
 
     // Get system templates và user's custom templates
-    let { data: templates, error } = await supabase
+    const { data: templatesData, error } = await supabase
       .from('templates')
       .select('*')
       .or(`is_system.eq.true,user_id.eq.${session.user.id}`)
       .order('is_system', { ascending: false })
       .order('usage_count', { ascending: false });
+    let templates = templatesData;
 
     if (error) {
       console.error('Error fetching templates:', error);

@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 
 // GET: List all folders for current user
 // POST: Create new folder
-export async function GET(request: NextRequest) {
+export async function GET(_request: Request) {
   try {
 
     // Check authentication

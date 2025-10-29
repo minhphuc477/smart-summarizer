@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: Request) {
   try {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     

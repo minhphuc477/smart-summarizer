@@ -4,9 +4,6 @@ import {
   getRemainingUsage,
   incrementGuestUsage,
   addGuestNote,
-  deleteGuestNote,
-  getGuestHistory,
-  clearGuestData,
   isGuestMode
 } from '../guestMode';
 

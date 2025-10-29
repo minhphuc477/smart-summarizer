@@ -60,14 +60,14 @@ export default function EncryptionDialog({ mode, content, onResult, trigger }: E
             encryptedData.salt
           );
           onResult(result);
-        } catch (e) {
+        } catch {
           throw new Error('Invalid encrypted content format');
         }
       }
       
       setOpen(false);
       resetForm();
-    } catch (error) {
+    } catch {
       setError(mode === 'encrypt' ? 'Encryption failed' : 'Decryption failed. Check your password.');
     } finally {
       setProcessing(false);

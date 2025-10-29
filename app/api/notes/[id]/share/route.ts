@@ -29,7 +29,7 @@ export async function PATCH(request: NextRequest, props: Params) {
     }
 
     // If enabling public share, ensure a persistent share_id exists
-    let updatePayload: Record<string, any> = { is_public: isPublic };
+  const updatePayload: Record<string, unknown> = { is_public: isPublic };
     if (isPublic) {
       const { data: existing, error: readErr } = await supabase
         .from('notes')

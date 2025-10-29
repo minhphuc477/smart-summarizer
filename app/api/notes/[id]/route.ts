@@ -36,7 +36,7 @@ export async function PATCH(request: NextRequest, props: Params) {
 
   const body = await request.json();
   const allowed = ['summary', 'original_notes', 'persona', 'folder_id', 'tags', 'sentiment', 'takeaways', 'actions', 'is_public', 'is_pinned'] as const;
-    const updates: Record<string, any> = {};
+    const updates: Record<string, unknown> = {};
     for (const key of allowed) if (key in body) updates[key] = body[key];
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });

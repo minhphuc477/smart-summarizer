@@ -260,7 +260,13 @@ function WorkspaceSettings({
 }) {
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'members' | 'settings'>('members');
-  const [members, setMembers] = useState<any[]>([]);
+  type Member = {
+    id: string;
+    role: string;
+    user_id: string;
+    user?: { email?: string } | null;
+  };
+  const [members, setMembers] = useState<Member[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -280,6 +286,8 @@ function WorkspaceSettings({
     if (open) {
       fetchMembers();
     }
+    // fetchMembers is defined within the component and doesn't change reference
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const handleInvite = async () => {

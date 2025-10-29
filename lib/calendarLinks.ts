@@ -35,13 +35,6 @@ function formatDateForGoogle(date: Date): string {
 }
 
 /**
- * Format date for Outlook/Office365 (YYYY-MM-DDTHH:MM:SS)
- */
-function formatDateForOutlook(date: Date): string {
-  return date.toISOString().slice(0, 19);
-}
-
-/**
  * Generate Google Calendar link
  */
 function generateGoogleCalendarLink(

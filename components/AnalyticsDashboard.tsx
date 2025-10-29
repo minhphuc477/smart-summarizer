@@ -7,7 +7,7 @@ import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
-import { Calendar, TrendingUp, FileText, Tag, Clock, Activity } from 'lucide-react';
+import { TrendingUp, FileText, Clock, Activity } from 'lucide-react';
 
 type AnalyticsData = {
   analytics: Array<{
@@ -35,28 +35,27 @@ type AnalyticsData = {
   }>;
 };
 
-export default function AnalyticsDashboard({ userId }: { userId: string }) {
+export default function AnalyticsDashboard({ userId: _userId }: { userId: string }) {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState('30'); // days
 
   useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        const response = await fetch(`/api/analytics?range=${range}`);
+        if (response.ok) {
+          const result = await response.json();
+          setData(result);
+        }
+      } catch (error) {
+        console.error('Error fetching analytics:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchAnalytics();
   }, [range]);
-
-  const fetchAnalytics = async () => {
-    try {
-      const response = await fetch(`/api/analytics?range=${range}`);
-      if (response.ok) {
-        const result = await response.json();
-        setData(result);
-      }
-    } catch (error) {
-      console.error('Error fetching analytics:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (

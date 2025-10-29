@@ -18,7 +18,7 @@ const resources = {
       
       // App specific
       "smartNoteSummarizer": "Smart Note Summarizer",
-      "pasteYourNotes": "Paste your notes",
+      "pasteYourNotes": "Paste your messy notes",
       "customPersona": "Custom AI Persona (optional)",
       "summarize": "Summarize",
       "summary": "Summary",

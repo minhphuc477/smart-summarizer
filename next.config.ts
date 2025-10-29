@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
+import createNextPwa from 'next-pwa';
 
-const withPWA = require('next-pwa')({
+const withPWA = createNextPwa({
   dest: 'public',
   // By default, disable PWA in dev to avoid SW caching issues.
   // Set PWA_DEV=true to enable PWA while running `next dev`.

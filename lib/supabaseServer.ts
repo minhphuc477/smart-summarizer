@@ -5,9 +5,12 @@ import { createClient } from '@supabase/supabase-js'
 // Falls back to anon client if @supabase/auth-helpers-nextjs is not installed.
 export function getServerSupabase() {
   try {
-    // @ts-ignore - dynamic require via eval to avoid bundler resolution
-    const req = eval('require') as any
-    const { createRouteHandlerClient } = req('@supabase/auth-helpers-nextjs')
+    // Define a minimal Node-style require signature to avoid explicit any
+    type NodeRequireFn = (id: string) => unknown;
+    const req = eval('require') as NodeRequireFn;
+    const { createRouteHandlerClient } = req('@supabase/auth-helpers-nextjs') as {
+      createRouteHandlerClient: (args: { cookies: typeof cookies }) => ReturnType<typeof createClient>;
+    };
     return createRouteHandlerClient({ cookies })
   } catch {
     return createClient(

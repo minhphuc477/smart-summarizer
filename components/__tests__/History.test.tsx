@@ -16,11 +16,13 @@ jest.mock('@/lib/supabase', () => ({
     from: jest.fn(() => ({
       select: jest.fn(() => ({
         order: jest.fn(() => ({
+          range: jest.fn(() => ({ data: [], error: null, count: 0 })),
           data: [],
           error: null,
         })),
         eq: jest.fn(() => ({
           order: jest.fn(() => ({
+            range: jest.fn(() => ({ data: [], error: null, count: 0 })),
             data: [],
             error: null,
           })),
@@ -48,7 +50,7 @@ jest.mock('@/lib/supabase', () => ({
 
 describe('History', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   describe('Guest Mode', () => {
@@ -167,14 +169,19 @@ describe('History', () => {
           return {
             select: () => ({
               order: () => ({
+                range: () => ({ data: mockNotes, error: null, count: mockNotes.length }),
                 data: mockNotes,
                 error: null,
               }),
               eq: () => ({
-                order: () => ({
-                  data: mockNotes.filter(n => n.folder_id === 5),
-                  error: null,
-                }),
+                order: () => {
+                  const filtered = mockNotes.filter(n => n.folder_id === 5);
+                  return {
+                    range: () => ({ data: filtered, error: null, count: filtered.length }),
+                    data: filtered,
+                    error: null,
+                  };
+                },
               }),
             }),
             delete: () => ({
@@ -364,6 +371,7 @@ describe('History', () => {
       supabase.from.mockImplementation(() => ({
         select: () => ({
           order: () => ({
+            range: () => ({ data: [], error: null, count: 0 }),
             data: [],
             error: null,
           }),

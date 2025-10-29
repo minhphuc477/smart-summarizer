@@ -71,8 +71,8 @@ export async function PATCH(
     const body = await request.json();
     const { name, prompt, description, is_default } = body;
 
-    // Build update object
-    const updates: any = {};
+  // Build update object
+  const updates: Record<string, unknown> = {};
     if (name !== undefined) updates.name = name;
     if (prompt !== undefined) updates.prompt = prompt;
     if (description !== undefined) updates.description = description;

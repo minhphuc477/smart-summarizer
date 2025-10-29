@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Folder, Plus, MoreVertical, Edit2, Trash2, FolderOpen } from "lucide-react";
+import { Plus, Edit2, Trash2, Folder, FolderOpen } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,7 +31,7 @@ type FolderSidebarProps = {
 };
 
 
-export default function FolderSidebar({ userId, onFolderSelect, selectedFolderId }: FolderSidebarProps) {
+export default function FolderSidebar({ userId: _userId, onFolderSelect, selectedFolderId }: FolderSidebarProps) {
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -363,7 +363,7 @@ export default function FolderSidebar({ userId, onFolderSelect, selectedFolderId
           <DialogHeader>
             <DialogTitle>Delete Folder</DialogTitle>
             <DialogDescription>
-              Are you sure? Notes in this folder will be moved to "All Notes".
+              Are you sure? Notes in this folder will be moved to &quot;All Notes&quot;.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -55,7 +55,6 @@ export async function GET(request: NextRequest) {
       const tags = tagsParam.split(',').map(s => s.trim()).filter(Boolean);
       if (tags.length) {
         // ensure inner join to filter by tag names
-        // @ts-ignore nested filter on joined table
         query = query.in('note_tags.tags.name', tags);
       }
     }
@@ -64,8 +63,7 @@ export async function GET(request: NextRequest) {
     // Note: range is inclusive; emulate limit/offset using range
     const start = offset;
     const end = offset + limit - 1;
-    // @ts-ignore - supabase-js supports range on select builders
-    const { data: notes, error } = query.order('created_at', { ascending: sort === 'asc' ? true : false }).range(start, end);
+    const { data: notes, error } = await query.order('created_at', { ascending: sort === 'asc' ? true : false }).range(start, end);
 
     if (error) {
       console.error('Error fetching notes:', error);

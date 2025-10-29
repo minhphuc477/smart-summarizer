@@ -66,6 +66,20 @@ process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co'
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key'
 process.env.GROQ_API_KEY = 'test-groq-key'
 
+// Mock Next.js App Router hooks globally for components using useRouter/usePathname
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    prefetch: jest.fn(),
+    back: jest.fn(),
+    forward: jest.fn(),
+    refresh: jest.fn(),
+  }),
+  usePathname: () => '/',
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 // Mock window.matchMedia (for responsive components)
 Object.defineProperty(window, 'matchMedia', {
   writable: true,

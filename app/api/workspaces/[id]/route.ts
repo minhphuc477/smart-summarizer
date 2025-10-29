@@ -68,8 +68,8 @@ export async function PATCH(request: NextRequest, props: Params) {
       }
     }
 
-    // Update workspace
-    const updateData: any = {};
+  // Update workspace
+  const updateData: Record<string, unknown> = {};
     if (name !== undefined) updateData.name = name.trim();
     if (description !== undefined) updateData.description = description?.trim() || null;
 

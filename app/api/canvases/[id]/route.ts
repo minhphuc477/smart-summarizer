@@ -66,7 +66,7 @@ export async function PATCH(request: NextRequest, props: Params) {
     const { title, description, nodes, edges, is_public } = body;
 
     // Update canvas metadata
-    const updateData: any = {};
+  const updateData: Record<string, unknown> = {};
     if (title !== undefined) updateData.title = title;
     if (description !== undefined) updateData.description = description;
     if (is_public !== undefined) updateData.is_public = is_public;

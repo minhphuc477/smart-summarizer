@@ -54,7 +54,8 @@ export async function GET(request: NextRequest) {
 
     // Count tags
     const tagCounts: Record<string, number> = {};
-    tagStats?.forEach((item: any) => {
+    const tagItems = (tagStats ?? []) as Array<{ tags?: { name?: string } | null }>;
+    tagItems.forEach((item) => {
       const tagName = item.tags?.name;
       if (tagName) {
         tagCounts[tagName] = (tagCounts[tagName] || 0) + 1;

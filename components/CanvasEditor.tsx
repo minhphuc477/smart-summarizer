@@ -3,7 +3,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import ReactFlow, {
   Node,
-  Edge,
   Controls,
   Background,
   MiniMap,
@@ -24,6 +23,29 @@ type CanvasEditorProps = {
   onSave?: () => void;
 };
 
+type DBNode = {
+  node_id: string;
+  type: string;
+  position_x: number;
+  position_y: number;
+  content: string;
+  color: string;
+  background_color: string;
+  width?: number;
+  height?: number;
+  border_color: string;
+};
+
+type DBEdge = {
+  edge_id: string;
+  source_node_id: string;
+  target_node_id: string;
+  type: string;
+  label?: string | null;
+  animated?: boolean | null;
+  color?: string | null;
+};
+
 const nodeTypes = {
   // Custom node types can be added here
 };
@@ -40,7 +62,7 @@ export default function CanvasEditor({ canvasId, workspaceId, onSave }: CanvasEd
     if (canvasId) {
       loadCanvas(canvasId);
     } else {
-      // Load draft from sessionStorage when arriving from SummarizerApp
+      // Check for draft canvas in sessionStorage
       try {
         const draft = sessionStorage.getItem('canvasDraft');
         if (draft) {
@@ -54,6 +76,8 @@ export default function CanvasEditor({ canvasId, workspaceId, onSave }: CanvasEd
         console.warn('Failed to load canvas draft:', e);
       }
     }
+    // loadCanvas, setNodes, and setEdges are stable callbacks from hooks
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId]);
 
   const loadCanvas = async (id: string) => {
@@ -64,7 +88,7 @@ export default function CanvasEditor({ canvasId, workspaceId, onSave }: CanvasEd
         setTitle(data.canvas.title);
         
         // Convert nodes from DB format to ReactFlow format
-        const flowNodes = data.nodes.map((node: any) => ({
+        const flowNodes = (data.nodes as DBNode[]).map((node) => ({
           id: node.node_id,
           type: node.type,
           position: { x: node.position_x, y: node.position_y },
@@ -84,14 +108,14 @@ export default function CanvasEditor({ canvasId, workspaceId, onSave }: CanvasEd
         }));
         
         // Convert edges
-        const flowEdges = data.edges.map((edge: any) => ({
+        const flowEdges = (data.edges as DBEdge[]).map((edge) => ({
           id: edge.edge_id,
           source: edge.source_node_id,
           target: edge.target_node_id,
           type: edge.type,
-          label: edge.label,
-          animated: edge.animated,
-          style: { stroke: edge.color },
+          label: edge.label ?? undefined,
+          animated: edge.animated ?? false,
+          style: edge.color ? { stroke: edge.color } : undefined,
         }));
         
         setNodes(flowNodes);

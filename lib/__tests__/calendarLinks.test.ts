@@ -1,4 +1,4 @@
-import { generateCalendarLinks, downloadICS } from '../calendarLinks';
+import { generateCalendarLinks } from '../calendarLinks';
 
 describe('Calendar Links Module', () => {
   const mockEvent = {

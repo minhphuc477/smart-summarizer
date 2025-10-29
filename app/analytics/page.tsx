@@ -8,8 +8,8 @@ export default function AnalyticsPage() {
   const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }: any) => {
-      if (data.user) {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) {
         setUserId(data.user.id);
       }
     });

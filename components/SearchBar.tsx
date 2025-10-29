@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, X } from "lucide-react";
+import { Search, X, ExternalLink, Copy, Check, Share2, Loader2, Trash2 } from "lucide-react";
 
 type SearchResult = {
   id: number;
@@ -22,11 +23,18 @@ type SearchBarProps = {
 };
 
 export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+
+  // Quick action states
+  const [copiedSummaryId, setCopiedSummaryId] = useState<number | null>(null);
+  const [sharingId, setSharingId] = useState<number | null>(null);
+  const [copiedShareId, setCopiedShareId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -57,9 +65,9 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
       }
 
       setSearchResults(data.results || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Search error:', err);
-      const message = (err && typeof err.message === 'string' && err.message !== 'Network error')
+      const message = (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' && err.message !== 'Network error')
         ? err.message
         : 'Failed to search. Please try again.';
       setError(message);
@@ -76,6 +84,77 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
     setError(null);
   };
 
+  // Quick action handlers
+  const openInCanvas = (id: number) => {
+    // Stash a minimal draft so Canvas opens meaningfully when no nodes exist
+    try {
+      const draft = { title: 'Summary Canvas', nodes: [], edges: [] };
+      sessionStorage.setItem('canvasDraft', JSON.stringify(draft));
+    } catch {}
+    router.push(`/canvas/${id}`);
+  };
+
+  const copySummary = async (id: number, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedSummaryId(id);
+      setTimeout(() => setCopiedSummaryId(null), 1500);
+    } catch (e) {
+      console.error('Copy failed', e);
+    }
+  };
+
+  const shareAndCopyLink = async (id: number) => {
+    try {
+      setSharingId(id);
+      const res = await fetch(`/api/notes/${id}/share`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to enable sharing');
+
+      const shareId = data?.note?.share_id;
+      if (!shareId) throw new Error('No share_id returned');
+      const url = `${window.location.origin}/share/${shareId}`;
+      await navigator.clipboard.writeText(url);
+      setCopiedShareId(id);
+      setTimeout(() => setCopiedShareId(null), 1500);
+    } catch (e) {
+      console.error('Share link error', e);
+      setError('Failed to create share link');
+      setTimeout(() => setError(null), 2000);
+    } finally {
+      setSharingId(null);
+    }
+  };
+
+  const deleteNote = async (id: number) => {
+    if (!window.confirm('Delete this note? This action cannot be undone.')) return;
+
+    try {
+      setDeletingId(id);
+      const res = await fetch(`/api/notes/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to delete note');
+      }
+
+      // Remove from search results
+      setSearchResults(prev => prev.filter(r => r.id !== id));
+    } catch (e) {
+      console.error('Delete error', e);
+      setError('Failed to delete note');
+      setTimeout(() => setError(null), 2000);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="mt-10 space-y-4">
       <div className="flex items-center gap-2 mb-4">
@@ -84,7 +163,7 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
       </div>
       
       <p className="text-sm text-muted-foreground mb-4">
-        Search your notes by meaning, not just keywords. Try asking questions like "What meetings did I have?" or "Show me urgent tasks"
+        Search your notes by meaning, not just keywords. Try asking questions like &quot;What meetings did I have?&quot; or &quot;Show me urgent tasks&quot;
       </p>
 
       {/* Search Input */}
@@ -168,6 +247,47 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
                         <span className="italic">· Persona: {result.persona}</span>
                       )}
                     </div>
+
+                    {/* Quick actions */}
+                    <div className="flex items-center justify-end gap-2 mt-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openInCanvas(result.id)}
+                        title="Open in Canvas"
+                      >
+                        <ExternalLink className="h-4 w-4 mr-1" /> Open
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => copySummary(result.id, result.summary)}
+                        title="Copy summary"
+                      >
+                        {copiedSummaryId === result.id ? (
+                          <Check className="h-4 w-4 mr-1 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4 mr-1" />
+                        )}
+                        Copy
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => shareAndCopyLink(result.id)}
+                        disabled={sharingId === result.id}
+                        title="Create share link"
+                      >
+                        {sharingId === result.id ? (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        ) : copiedShareId === result.id ? (
+                          <Check className="h-4 w-4 mr-1 text-green-600" />
+                        ) : (
+                          <Share2 className="h-4 w-4 mr-1" />
+                        )}
+                        Share link
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -175,7 +295,7 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
           ) : (
             <div className="text-center py-8 text-muted-foreground">
               <Search className="h-12 w-12 mx-auto mb-3 text-muted-foreground/40" />
-              <p>No results found for "{searchQuery}"</p>
+              <p>No results found for &quot;{searchQuery}&quot;</p>
               <p className="text-sm mt-1">Try a different search query</p>
             </div>
           )}

@@ -6,7 +6,7 @@ jest.mock('@/lib/supabase', () => {
     if (table === 'templates') {
       return {
         select: () => ({ eq: () => ({ single: () => ({ data: { id: 't1', name: 'T', usage_count: 1 }, error: null }) }) }),
-        update: (data: any) => ({ eq: () => ({ select: () => ({ single: () => ({ data: { id: 't1', name: 'T', usage_count: 2 }, error: null }) }) }) }),
+        update: (_data: any) => ({ eq: () => ({ select: () => ({ single: () => ({ data: { id: 't1', name: 'T', usage_count: 2 }, error: null }) }) }) }),
         delete: () => ({ eq: () => ({ data: null, error: null }) }),
       } as any;
     }

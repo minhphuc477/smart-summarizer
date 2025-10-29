@@ -32,8 +32,6 @@ export default function TemplateSelector({ onSelectTemplate }: TemplateSelectorP
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [query, setQuery] = useState('');
-  // Density is fixed to compact per product decision (no Comfortable option)
-  const density: 'compact' = 'compact';
   const [form, setForm] = useState({
     name: '',
     description: '',
