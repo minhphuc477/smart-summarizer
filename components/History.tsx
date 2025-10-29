@@ -73,6 +73,9 @@ type Folder = {
 import SearchBar from './SearchBar';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { EmptyState } from '@/components/EmptyState';
+import { FileQuestion } from 'lucide-react';
+import { toast } from 'sonner';
 
 type HistoryProps = {
   isGuest?: boolean;
@@ -106,7 +109,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const PAGE_SIZE = 10;
   const [analyzingNoteId, setAnalyzingNoteId] = useState<number | null>(null);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  // Sonner toasts are used globally via <Toaster /> in layout
   const [editNoteId, setEditNoteId] = useState<number | null>(null);
   const [editFormData, setEditFormData] = useState<{
     original_notes: string;
@@ -326,6 +329,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
 
       if (error) {
         console.error("Error loading more notes:", error);
+        toast.error('Failed to load more notes');
       } else {
   setNotes(prev => [...prev, ...(data || []) as unknown as Note[]]);
   setPage(nextPage);
@@ -344,6 +348,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
       if (isGuest) {
   guestMode.deleteGuestNote(id as string);
   setGuestNotes(guestMode.getGuestHistory());
+        toast.success('Note deleted');
       } else {
         const { error } = await supabase
           .from('notes')
@@ -351,6 +356,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
           .eq('id', id);
         if (!error) {
           setNotes(notes.filter(n => n.id !== id));
+          toast.success('Note deleted');
         }
       }
     } finally {
@@ -404,6 +410,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
       setNotes((data || []) as unknown as Note[]);
       setMoveNoteId(null);
       setSelectedFolder("");
+      toast.success('Moved note to folder');
     }
   };
 
@@ -450,17 +457,14 @@ export default function History({ isGuest = false, selectedFolderId = null, user
       const res = await fetch(`/api/notes/${noteId}/analyze`, { method: 'POST' });
       if (!res.ok) {
         console.error('Failed to analyze note');
-        setToast({ type: 'error', message: 'Analyze failed. Please try again.' });
-        setTimeout(() => setToast(null), 3000);
+        toast.error('Analyze failed. Please try again.');
         return;
       }
       await refreshOneNote(noteId);
-      setToast({ type: 'success', message: 'Analysis complete. Tags & sentiment updated.' });
-      setTimeout(() => setToast(null), 2500);
+      toast.success('Analysis complete. Tags & sentiment updated.');
     } catch (e) {
       console.error('Analyze error:', e);
-      setToast({ type: 'error', message: 'Analyze failed due to a network error.' });
-      setTimeout(() => setToast(null), 3000);
+      toast.error('Analyze failed due to a network error.');
     } finally {
       setAnalyzingNoteId(null);
     }
@@ -480,6 +484,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
       }
       const { note } = await res.json();
       setNotes(notes.map(n => n.id === noteId ? { ...n, is_public: note.is_public, share_id: note.share_id } : n));
+      toast.success(note.is_public ? 'Sharing enabled' : 'Sharing disabled');
     } catch (e) {
       console.error('Error toggling share:', e);
     }
@@ -491,6 +496,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
     await navigator.clipboard.writeText(shareUrl);
     setCopiedNoteId(noteId);
     setTimeout(() => setCopiedNoteId(null), 2000);
+    toast.success('Share link copied');
   };
 
   // Toggle pin/favorite
@@ -502,8 +508,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
         body: JSON.stringify({ is_pinned: !currentIsPinned }),
       });
       if (!res.ok) {
-        setToast({ type: 'error', message: 'Failed to toggle pin' });
-        setTimeout(() => setToast(null), 3000);
+        toast.error('Failed to toggle pin');
         return;
       }
       const { note } = await res.json();
@@ -516,15 +521,10 @@ export default function History({ isGuest = false, selectedFolderId = null, user
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
       setNotes(updatedNotes);
-      setToast({ 
-        type: 'success', 
-        message: note.is_pinned ? 'Note pinned' : 'Note unpinned' 
-      });
-      setTimeout(() => setToast(null), 2000);
+      toast.success(note.is_pinned ? 'Note pinned' : 'Note unpinned');
     } catch (e) {
       console.error('Error toggling pin:', e);
-      setToast({ type: 'error', message: 'Failed to toggle pin' });
-      setTimeout(() => setToast(null), 3000);
+      toast.error('Failed to toggle pin');
     }
   };
 
@@ -558,19 +558,16 @@ export default function History({ isGuest = false, selectedFolderId = null, user
       });
       
       if (!res.ok) {
-        setToast({ type: 'error', message: 'Failed to save changes' });
-        setTimeout(() => setToast(null), 3000);
+        toast.error('Failed to save changes');
         return;
       }
       
       await refreshOneNote(editNoteId);
       setEditNoteId(null);
-      setToast({ type: 'success', message: 'Note updated successfully' });
-      setTimeout(() => setToast(null), 2500);
+      toast.success('Note updated successfully');
     } catch (e) {
       console.error('Edit error:', e);
-      setToast({ type: 'error', message: 'Failed to save changes' });
-      setTimeout(() => setToast(null), 3000);
+      toast.error('Failed to save changes');
     }
   };
 
@@ -638,20 +635,17 @@ export default function History({ isGuest = false, selectedFolderId = null, user
       });
       
       if (!res.ok) {
-        setToast({ type: 'error', message: 'Failed to add tag' });
-        setTimeout(() => setToast(null), 3000);
+        toast.error('Failed to add tag');
         return;
       }
       
       await refreshOneNote(noteId);
       setNewTagInput('');
       setTagSuggestions([]);
-      setToast({ type: 'success', message: 'Tag added' });
-      setTimeout(() => setToast(null), 2000);
+      toast.success('Tag added');
     } catch (e) {
       console.error('Add tag error:', e);
-      setToast({ type: 'error', message: 'Failed to add tag' });
-      setTimeout(() => setToast(null), 3000);
+      toast.error('Failed to add tag');
     }
   };
 
@@ -663,18 +657,15 @@ export default function History({ isGuest = false, selectedFolderId = null, user
       });
       
       if (!res.ok) {
-        setToast({ type: 'error', message: 'Failed to remove tag' });
-        setTimeout(() => setToast(null), 3000);
+        toast.error('Failed to remove tag');
         return;
       }
       
       await refreshOneNote(noteId);
-      setToast({ type: 'success', message: 'Tag removed' });
-      setTimeout(() => setToast(null), 2000);
+      toast.success('Tag removed');
     } catch (e) {
       console.error('Remove tag error:', e);
-      setToast({ type: 'error', message: 'Failed to remove tag' });
-      setTimeout(() => setToast(null), 3000);
+      toast.error('Failed to remove tag');
     }
   };
 
@@ -725,12 +716,10 @@ export default function History({ isGuest = false, selectedFolderId = null, user
       setNotes(notes.filter(n => !selectedNoteIds.has(n.id)));
       setSelectedNoteIds(new Set());
       setBulkActionMode(false);
-      setToast({ type: 'success', message: `${selectedNoteIds.size} note(s) deleted` });
-      setTimeout(() => setToast(null), 3000);
+      toast.success(`${selectedNoteIds.size} note(s) deleted`);
     } catch (e) {
       console.error('Bulk delete error:', e);
-      setToast({ type: 'error', message: 'Failed to delete notes' });
-      setTimeout(() => setToast(null), 3000);
+      toast.error('Failed to delete notes');
     }
   };
 
@@ -745,7 +734,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
         .update({ folder_id: folderId })
         .in('id', Array.from(selectedNoteIds));
 
-      if (error) throw error;
+  if (error) throw error;
 
       // Update the notes in state with new folder info
       const { data: foldersData } = await supabase
@@ -767,12 +756,10 @@ export default function History({ isGuest = false, selectedFolderId = null, user
       
       setSelectedNoteIds(new Set());
       setBulkActionMode(false);
-      setToast({ type: 'success', message: `${selectedNoteIds.size} note(s) moved` });
-      setTimeout(() => setToast(null), 3000);
+      toast.success(`${selectedNoteIds.size} note(s) moved`);
     } catch (e) {
       console.error('Bulk move error:', e);
-      setToast({ type: 'error', message: 'Failed to move notes' });
-      setTimeout(() => setToast(null), 3000);
+      toast.error('Failed to move notes');
     }
   };
 
@@ -815,8 +802,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    setToast({ type: 'success', message: `${selectedNoteIds.size} note(s) exported` });
-    setTimeout(() => setToast(null), 3000);
+    toast.success(`${selectedNoteIds.size} note(s) exported`);
   };
 
   if (loading) {
@@ -1104,7 +1090,11 @@ export default function History({ isGuest = false, selectedFolderId = null, user
               </Card>
             ))
           ) : (
-            <p className="text-muted-foreground">No notes yet.</p>
+            <EmptyState
+              icon={FileQuestion}
+              title="No notes yet"
+              description="Summaries you create will appear here."
+            />
           )
         ) : (
           // Logged in mode
@@ -1337,7 +1327,11 @@ export default function History({ isGuest = false, selectedFolderId = null, user
               </Card>
             ))
           ) : (
-            <p className="text-muted-foreground">No notes yet.</p>
+            <EmptyState
+              icon={FileQuestion}
+              title="No notes yet"
+              description="Create your first summary to see it here."
+            />
           )
         )}
         
@@ -1592,20 +1586,7 @@ export default function History({ isGuest = false, selectedFolderId = null, user
         </DialogContent>
       </Dialog>
 
-      {/* Toast Notification */}
-      {toast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 ${
-            toast.type === 'success'
-              ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800'
-              : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800'
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
+      {/* Sonner toasts are rendered globally via <Toaster /> */}
     </div>
   );
 }

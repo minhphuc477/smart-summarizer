@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { supabase } from '@/lib/supabase';
 
 export default function AnalyticsPage() {
@@ -33,7 +34,9 @@ export default function AnalyticsPage() {
           Track your usage and productivity insights
         </p>
       </div>
-      <AnalyticsDashboard userId={userId} />
+      <ErrorBoundary>
+        <AnalyticsDashboard userId={userId} />
+      </ErrorBoundary>
     </div>
   );
 }

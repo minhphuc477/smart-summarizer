@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, X, ExternalLink, Copy, Check, Share2, Loader2, Trash2 } from "lucide-react";
+import { toast } from 'sonner';
 
 type SearchResult = {
   id: number;
@@ -71,6 +72,7 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
         ? err.message
         : 'Failed to search. Please try again.';
       setError(message);
+      toast.error(message);
       setSearchResults([]);
     } finally {
       setIsSearching(false);
@@ -101,6 +103,7 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
       setTimeout(() => setCopiedSummaryId(null), 1500);
     } catch (e) {
       console.error('Copy failed', e);
+      toast.error('Failed to copy');
     }
   };
 
@@ -121,10 +124,12 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
       await navigator.clipboard.writeText(url);
       setCopiedShareId(id);
       setTimeout(() => setCopiedShareId(null), 1500);
+      toast.success('Share link copied to clipboard');
     } catch (e) {
       console.error('Share link error', e);
       setError('Failed to create share link');
       setTimeout(() => setError(null), 2000);
+      toast.error('Failed to create share link');
     } finally {
       setSharingId(null);
     }
@@ -150,6 +155,7 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
       console.error('Delete error', e);
       setError('Failed to delete note');
       setTimeout(() => setError(null), 2000);
+      toast.error('Failed to delete note');
     } finally {
       setDeletingId(null);
     }

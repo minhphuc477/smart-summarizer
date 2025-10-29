@@ -1,9 +1,12 @@
 import CanvasEditor from '@/components/CanvasEditor';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export default function CanvasPage() {
   return (
     <div className="h-screen">
-      <CanvasEditor />
+      <ErrorBoundary>
+        <CanvasEditor />
+      </ErrorBoundary>
     </div>
   );
 }

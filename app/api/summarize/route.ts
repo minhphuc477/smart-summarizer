@@ -3,9 +3,6 @@ import { getGroqSummary } from '@/lib/groq'; // Import hàm tái sử dụng
 import { getServerSupabase } from '@/lib/supabaseServer';
 import { createRequestLogger } from '@/lib/logger';
 
-// Tạo Supabase client cho server-side
-const supabase = getServerSupabase();
-
 export async function POST(req: Request) {
   const startTime = Date.now();
   const logger = createRequestLogger(req);
@@ -52,6 +49,7 @@ export async function POST(req: Request) {
     // Logged in mode: Lưu vào database
     if (userId && jsonResponse.tags && Array.isArray(jsonResponse.tags)) {
       const dbStartTime = Date.now();
+      const supabase = getServerSupabase();
       
       try {
         // Bước 1: Lưu note vào bảng notes

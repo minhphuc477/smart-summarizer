@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -46,7 +47,6 @@ export function PersonaManager({
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [personaSearchQuery, setPersonaSearchQuery] = useState('');
 
   // Form state for saving new persona
@@ -82,8 +82,7 @@ export function PersonaManager({
       }
     } catch (error) {
       console.error('Error fetching personas:', error);
-      setToast({ type: 'error', message: 'Failed to load personas' });
-      setTimeout(() => setToast(null), 3000);
+      toast.error('Failed to load personas');
     } finally {
       setIsLoading(false);
     }
@@ -91,8 +90,7 @@ export function PersonaManager({
 
   const handleSavePersona = async () => {
     if (!newPersona.name.trim() || !newPersona.prompt.trim()) {
-      setToast({ type: 'error', message: 'Name and prompt are required' });
-      setTimeout(() => setToast(null), 3000);
+      toast.error('Name and prompt are required');
       return;
     }
 
@@ -107,8 +105,7 @@ export function PersonaManager({
       const data = await response.json();
 
       if (response.ok) {
-        setToast({ type: 'success', message: 'Persona saved successfully' });
-        setTimeout(() => setToast(null), 2500);
+        toast.success('Persona saved successfully');
         setIsSaveDialogOpen(false);
         setNewPersona({
           name: '',
@@ -122,8 +119,7 @@ export function PersonaManager({
       }
     } catch (error) {
       console.error('Error saving persona:', error);
-      setToast({ type: 'error', message: 'Failed to save persona' });
-      setTimeout(() => setToast(null), 3000);
+      toast.error('Failed to save persona');
     } finally {
       setIsLoading(false);
     }
@@ -141,8 +137,7 @@ export function PersonaManager({
       });
 
       if (response.ok) {
-        setToast({ type: 'success', message: 'Persona deleted successfully' });
-        setTimeout(() => setToast(null), 2500);
+        toast.success('Persona deleted successfully');
         await fetchPersonas();
         if (selectedPersonaId === id) {
           setSelectedPersonaId('');
@@ -153,8 +148,7 @@ export function PersonaManager({
       }
     } catch (error) {
       console.error('Error deleting persona:', error);
-      setToast({ type: 'error', message: 'Failed to delete persona' });
-      setTimeout(() => setToast(null), 3000);
+      toast.error('Failed to delete persona');
     } finally {
       setIsLoading(false);
     }
@@ -170,8 +164,7 @@ export function PersonaManager({
       });
 
       if (response.ok) {
-        setToast({ type: 'success', message: 'Default persona updated' });
-        setTimeout(() => setToast(null), 2500);
+        toast.success('Default persona updated');
         await fetchPersonas();
       } else {
         const data = await response.json();
@@ -179,8 +172,7 @@ export function PersonaManager({
       }
     } catch (error) {
       console.error('Error setting default persona:', error);
-      setToast({ type: 'error', message: 'Failed to set default persona' });
-      setTimeout(() => setToast(null), 3000);
+      toast.error('Failed to set default persona');
     } finally {
       setIsLoading(false);
     }
@@ -191,8 +183,7 @@ export function PersonaManager({
     const persona = personas.find((p) => p.id === value);
     if (persona) {
       onSelectPersona(persona.prompt);
-      setToast({ type: 'success', message: `Using persona: ${persona.name}` });
-      setTimeout(() => setToast(null), 2000);
+      toast.success(`Using persona: ${persona.name}`);
     }
   };
 
@@ -214,19 +205,6 @@ export function PersonaManager({
 
   return (
     <div className="space-y-2">
-      {/* Toast Notification */}
-      {toast && (
-        <div
-          className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${
-            toast.type === 'success'
-              ? 'bg-green-500 text-white'
-              : 'bg-red-500 text-white'
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
-
       <div className="flex items-center gap-2">
       {/* Persona Selector */}
       <Select value={selectedPersonaId} onValueChange={handleSelectPersona}>

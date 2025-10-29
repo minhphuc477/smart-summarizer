@@ -46,6 +46,11 @@ export async function POST(request: NextRequest, props: Params) {
       tag = newTag;
     }
 
+    // Ensure tag is not null before using it
+    if (!tag) {
+      return NextResponse.json({ error: 'Failed to get or create tag' }, { status: 500 });
+    }
+
     // Link tag to note (ignore duplicate)
     const { error: linkError } = await supabase
       .from('note_tags')
