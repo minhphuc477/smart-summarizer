@@ -6,7 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Trash2, FolderInput, Share2, Copy, Check, Edit, Download, Tag, X, ChevronDown, Star, Filter, Calendar, CheckSquare, Square } from 'lucide-react';
+import { Trash2, FolderInput, Share2, Copy, Check, Edit, Download, Tag, X, ChevronDown, Star, Filter, Calendar, CheckSquare, Square, Volume2, VolumeX } from 'lucide-react';
 import * as guestMode from '@/lib/guestMode';
 import type { GuestNote } from '@/lib/guestMode';
 import {
@@ -77,6 +77,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { FileQuestion } from 'lucide-react';
 import { toast } from 'sonner';
 import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts';
+import { useSpeech } from '@/lib/useSpeech';
 
 type HistoryProps = {
   isGuest?: boolean;
@@ -130,6 +131,9 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
   // Keyboard navigation state (logged-in mode)
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
+  // TTS state
+  const { speak, stop, isSpeaking, isSupported } = useSpeech();
+  const [speakingNoteId, setSpeakingNoteId] = useState<number | string | null>(null);
 
   const getSentimentEmoji = (sentiment?: string) => {
     switch (sentiment) {
@@ -1176,9 +1180,43 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
                     </div>
                     <div className="flex items-center gap-2">
                       {note.sentiment && (
-                        <span className="text-2xl" title={note.sentiment}>
-                          {getSentimentEmoji(note.sentiment)}
-                        </span>
+                        <>
+                          <span className="text-2xl" title={note.sentiment}>
+                            {getSentimentEmoji(note.sentiment)}
+                          </span>
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full border
+                              ${note.sentiment === 'positive' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border-green-200 dark:border-green-800'
+                                : note.sentiment === 'negative' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 border-red-200 dark:border-red-800'
+                                : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-700'}`}
+                            aria-label={`Sentiment ${note.sentiment}`}
+                          >
+                            {note.sentiment}
+                          </span>
+                        </>
+                      )}
+                      {isSupported && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            if (speakingNoteId === note.id && isSpeaking) {
+                              stop();
+                              setSpeakingNoteId(null);
+                            } else {
+                              speak(note.summary);
+                              setSpeakingNoteId(note.id);
+                            }
+                          }}
+                          title="Speak summary"
+                          aria-label="Speak summary"
+                        >
+                          {speakingNoteId === note.id && isSpeaking ? (
+                            <VolumeX className="h-4 w-4" />
+                          ) : (
+                            <Volume2 className="h-4 w-4" />
+                          )}
+                        </Button>
                       )}
                       <Button
                         variant="ghost"
@@ -1276,9 +1314,43 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
                     </div>
                     <div className="flex items-center gap-2">
                       {note.sentiment && (
-                        <span className="text-2xl" title={note.sentiment}>
-                          {getSentimentEmoji(note.sentiment)}
-                        </span>
+                        <>
+                          <span className="text-2xl" title={note.sentiment}>
+                            {getSentimentEmoji(note.sentiment)}
+                          </span>
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full border
+                              ${note.sentiment === 'positive' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border-green-200 dark:border-green-800'
+                                : note.sentiment === 'negative' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 border-red-200 dark:border-red-800'
+                                : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-700'}`}
+                            aria-label={`Sentiment ${note.sentiment}`}
+                          >
+                            {note.sentiment}
+                          </span>
+                        </>
+                      )}
+                      {isSupported && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            if (speakingNoteId === note.id && isSpeaking) {
+                              stop();
+                              setSpeakingNoteId(null);
+                            } else {
+                              speak(note.summary);
+                              setSpeakingNoteId(note.id);
+                            }
+                          }}
+                          title="Speak summary"
+                          aria-label="Speak summary"
+                        >
+                          {speakingNoteId === note.id && isSpeaking ? (
+                            <VolumeX className="h-4 w-4" />
+                          ) : (
+                            <Volume2 className="h-4 w-4" />
+                          )}
+                        </Button>
                       )}
                       <Button
                         variant="outline"

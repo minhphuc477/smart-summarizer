@@ -18,6 +18,7 @@ type SearchResult = {
   persona: string;
   created_at: string;
   similarity: number;
+  sentiment?: 'positive' | 'neutral' | 'negative' | null;
 };
 
 type SearchBarProps = {
@@ -358,7 +359,7 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
                       <CardTitle className="text-base font-semibold">
                         {result.summary}
                       </CardTitle>
-                      <span className="text-xs font-medium px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full whitespace-nowrap ml-2">
+                      <span className="text-xs font-medium px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full border border-blue-200 dark:border-blue-800 whitespace-nowrap ml-2">
                         {Math.round(result.similarity * 100)}% match
                       </span>
                     </div>
@@ -373,6 +374,19 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
                       </span>
                       {result.persona && (
                         <span className="italic">· Persona: {result.persona}</span>
+                      )}
+                      {result.sentiment && (
+                        <span className="inline-flex items-center gap-1">
+                          <span className="text-base" aria-hidden>
+                            {result.sentiment === 'positive' ? '😊' : result.sentiment === 'negative' ? '😞' : '😐'}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full border text-[10px]
+                            ${result.sentiment === 'positive' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border-green-200 dark:border-green-800'
+                              : result.sentiment === 'negative' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 border-red-200 dark:border-red-800'
+                              : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-700'}`}>
+                            {result.sentiment}
+                          </span>
+                        </span>
                       )}
                     </div>
 
