@@ -6,7 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Trash2, FolderInput, Share2, Copy, Check, Edit, Download, Tag, X, ChevronDown, Star, Filter, Calendar, CheckSquare, Square, Volume2, VolumeX } from 'lucide-react';
+import { Trash2, FolderInput, Share2, Copy, Check, Edit, Download, Tag, X, ChevronDown, Star, Filter, Calendar, CheckSquare, Square, Volume2, VolumeX, ArrowUpDown } from 'lucide-react';
 import * as guestMode from '@/lib/guestMode';
 import type { GuestNote } from '@/lib/guestMode';
 import {
@@ -77,6 +77,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { FileQuestion } from 'lucide-react';
 import { toast } from 'sonner';
 import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts';
+import { generateCalendarLinks, downloadICS } from '@/lib/calendarLinks';
 import { useSpeech } from '@/lib/useSpeech';
 
 type HistoryProps = {
@@ -106,6 +107,25 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
   const [sentimentFilter, setSentimentFilter] = useState<'positive' | 'neutral' | 'negative' | null>(null);
   const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month' | null>(null);
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
+  
+  // Sort state with persistence
+  type SortOrder = 'newest' | 'oldest' | 'title-asc' | 'title-desc' | 'sentiment';
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => {
+    try {
+      const saved = localStorage.getItem('historySortOrder');
+      if (saved && ['newest', 'oldest', 'title-asc', 'title-desc', 'sentiment'].includes(saved)) {
+        return saved as SortOrder;
+      }
+    } catch {}
+    return isGuest ? 'oldest' : 'newest';
+  });
+  
+  // Persist sort order when changed
+  useEffect(() => {
+    try {
+      localStorage.setItem('historySortOrder', sortOrder);
+    } catch {}
+  }, [sortOrder]);
   
   // Pagination state
   const [page, setPage] = useState(1);
@@ -145,6 +165,13 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
       default:
         return '😐';
     }
+  };
+
+  // Normalize action item label from various shapes used in API/tests
+  const getActionTask = (a: unknown): string => {
+    if (!a || typeof a !== 'object') return '';
+    const anyA = a as { task?: unknown; title?: unknown };
+    return String(anyA.task ?? anyA.title ?? '');
   };
 
   // Helper function to check if note matches date filter
@@ -361,20 +388,43 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
   // Delete note (invoked after confirmation)
   const confirmDelete = async () => {
     if (!deleteNoteId && deleteNoteId !== 0) return;
-  const id = deleteNoteId as number | string; // Ensure id is correctly typed
+    const id = deleteNoteId as number | string;
+    
     try {
       if (isGuest) {
-        guestMode.deleteGuestNote(id as string);
-        setGuestNotes(guestMode.getGuestHistory());
+        // Optimistic update for guest
+        const originalNotes = guestNotes;
+        setGuestNotes(guestNotes.filter(n => n.id !== id));
         toast.success('Note deleted');
+        
+        try {
+          guestMode.deleteGuestNote(id as string);
+        } catch (e) {
+          // Revert on error
+          setGuestNotes(originalNotes);
+          toast.error('Failed to delete note');
+        }
       } else {
-        const { error } = await supabase
-          .from('notes')
-          .delete()
-          .eq('id', id);
-        if (!error) {
-          setNotes(notes.filter(n => n.id !== id));
-          toast.success('Note deleted');
+        // Optimistic update for logged-in user
+        const originalNotes = notes;
+        setNotes(notes.filter(n => n.id !== id));
+        toast.success('Note deleted');
+        
+        try {
+          const { error } = await supabase
+            .from('notes')
+            .delete()
+            .eq('id', id);
+          
+          if (error) {
+            // Revert on error
+            setNotes(originalNotes);
+            toast.error('Failed to delete note');
+          }
+        } catch (e) {
+          // Revert on error
+          setNotes(originalNotes);
+          toast.error('Failed to delete note');
         }
       }
     } finally {
@@ -388,49 +438,49 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
 
     const folderId = selectedFolder === "none" ? null : parseInt(selectedFolder);
 
-    const { error } = await supabase
-      .from('notes')
-      .update({ folder_id: folderId })
-      .eq('id', moveNoteId);
+    // Optimistic update
+    const originalNotes = notes;
+    const targetFolder = folders.find(f => f.id === folderId);
+    
+    setNotes(notes.map(n => {
+      if (n.id === moveNoteId) {
+        return {
+          ...n,
+          folder_id: folderId ?? undefined,
+          folders: targetFolder
+        };
+      }
+      return n;
+    }));
+    
+    setMoveNoteId(null);
+    setSelectedFolder("");
+    toast.success('Note moved');
 
-    if (!error) {
-      // Refresh notes (left joins to include untagged notes)
-      const { data } = await supabase
+    try {
+      const { error } = await supabase
         .from('notes')
-        .select(`
-          id, 
-          created_at, 
-          summary, 
-          persona, 
-          sentiment,
-          folder_id,
-          is_public,
-          is_pinned,
-          share_id,
-          original_notes,
-          takeaways,
-          actions,
-          folders (
-            id,
-            name,
-            color
-          ),
-          note_tags (
-            tags (
-              id,
-              name
-            )
-          )
-        `)
-        .order('is_pinned', { ascending: false })
-        .order('created_at', { ascending: false });
+        .update({ folder_id: folderId })
+        .eq('id', moveNoteId);
 
-      setNotes((data || []) as unknown as Note[]);
-      setMoveNoteId(null);
-      setSelectedFolder("");
-      toast.success('Moved note to folder');
+      if (error) {
+        // Revert on error
+        setNotes(originalNotes);
+        toast.error('Failed to move note');
+        return;
+      }
+
+      // Refresh to get accurate folder data
+      await refreshOneNote(moveNoteId);
+    } catch (e) {
+      console.error('Move error:', e);
+      // Revert on error
+      setNotes(originalNotes);
+      toast.error('Failed to move note');
     }
   };
+
+  // Share note (toggle public)
 
   // Refresh a single note with relations
   const refreshOneNote = async (noteId: number) => {
@@ -880,6 +930,53 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
     });
   }, [notes, isGuest, filterQuery, sentimentFilter, selectedTagFilter, matchesDateFilter]);
 
+  // Sorted lists based on sortOrder
+  const sortedGuestNotes = useMemo(() => {
+    const arr = [...filteredGuestNotes];
+    const sentimentRank = (s?: string) => (s === 'positive' ? 2 : s === 'neutral' ? 1 : s === 'negative' ? 0 : -1);
+    arr.sort((a, b) => {
+      switch (sortOrder) {
+        case 'oldest':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case 'title-asc':
+          return a.summary.localeCompare(b.summary);
+        case 'title-desc':
+          return b.summary.localeCompare(a.summary);
+        case 'sentiment':
+          return sentimentRank(b.sentiment) - sentimentRank(a.sentiment);
+        case 'newest':
+        default:
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+    });
+    return arr;
+  }, [filteredGuestNotes, sortOrder]);
+
+  const sortedNotes = useMemo(() => {
+    const sentimentRank = (s?: string) => (s === 'positive' ? 2 : s === 'neutral' ? 1 : s === 'negative' ? 0 : -1);
+    const cmp = (a: Note, b: Note) => {
+      switch (sortOrder) {
+        case 'oldest':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case 'title-asc':
+          return a.summary.localeCompare(b.summary);
+        case 'title-desc':
+          return b.summary.localeCompare(a.summary);
+        case 'sentiment':
+          return sentimentRank(b.sentiment) - sentimentRank(a.sentiment);
+        case 'newest':
+        default:
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+    };
+    // Keep pinned notes first, but apply sorting within each group
+    const pinned = filteredNotes.filter(n => n.is_pinned);
+    const others = filteredNotes.filter(n => !n.is_pinned);
+    pinned.sort(cmp);
+    others.sort(cmp);
+    return [...pinned, ...others];
+  }, [filteredNotes, sortOrder]);
+
   const scrollFocusedIntoView = (index: number | null) => {
     if (index == null) return;
     const items = document.querySelectorAll<HTMLElement>('.history-note-card');
@@ -1053,6 +1150,33 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* Sort */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <ArrowUpDown className="h-4 w-4 mr-2" />
+                Sort: {sortOrder === 'newest' ? 'Newest' : sortOrder === 'oldest' ? 'Oldest' : sortOrder === 'title-asc' ? 'Title A–Z' : sortOrder === 'title-desc' ? 'Title Z–A' : 'Sentiment'}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setSortOrder('newest')}>
+                Newest
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortOrder('oldest')}>
+                Oldest
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortOrder('title-asc')}>
+                Title A–Z
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortOrder('title-desc')}>
+                Title Z–A
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortOrder('sentiment')}>
+                Sentiment
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {/* Selected Tag Filter Display */}
           {selectedTagFilter && (
             <Button 
@@ -1166,8 +1290,8 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
       <div className="space-y-4">
         {isGuest ? (
           // Guest mode
-          (filteredGuestNotes.length > 0) ? (
-            filteredGuestNotes.map(note => (
+          (sortedGuestNotes.length > 0) ? (
+            sortedGuestNotes.map(note => (
               <Card key={note.id} className="history-note-card">
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -1248,6 +1372,62 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
                       ))}
                     </div>
                   )}
+
+                  {/* Action Items (Guest) */}
+                  {note.actions && Array.isArray(note.actions) && note.actions.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Action Items</p>
+                      <ul className="space-y-1">
+                        {note.actions.map((a, i) => (
+                          <li key={`${note.id}-a-${i}`} className="flex items-center justify-between gap-2 text-sm">
+                            <div className="flex items-center gap-2">
+                              <span>{getActionTask(a)}</span>
+                              {a.datetime && (
+                                <span className="text-xs text-muted-foreground">({new Date(a.datetime).toLocaleString()})</span>
+                              )}
+                            </div>
+                            {a.datetime && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" aria-label="Add to Calendar">
+                                    <Calendar className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {(() => {
+                                    const links = generateCalendarLinks({
+                                      task: getActionTask(a),
+                                      datetime: a.datetime!,
+                                      description: note.summary.slice(0, 100)
+                                    });
+                                    return (
+                                      <>
+                                        <DropdownMenuItem asChild>
+                                          <a href={links.google} target="_blank" rel="noopener noreferrer">Google Calendar</a>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild>
+                                          <a href={links.outlook} target="_blank" rel="noopener noreferrer">Outlook.com</a>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild>
+                                          <a href={links.office365} target="_blank" rel="noopener noreferrer">Office 365</a>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild>
+                                          <a href={links.yahoo} target="_blank" rel="noopener noreferrer">Yahoo Calendar</a>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => downloadICS(getActionTask(a), a.datetime!, 60, note.summary.slice(0, 100))}>
+                                          Download ICS
+                                        </DropdownMenuItem>
+                                      </>
+                                    );
+                                  })()}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </CardHeader>
               </Card>
             ))
@@ -1260,8 +1440,8 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
           )
         ) : (
           // Logged in mode
-          (filteredNotes.length > 0) ? (
-            filteredNotes.map((note, index) => (
+          (sortedNotes.length > 0) ? (
+            sortedNotes.map((note, index) => (
               <Card 
                 key={note.id} 
                 className={`history-note-card ${bulkActionMode && selectedNoteIds.has(note.id) ? 'ring-2 ring-primary' : ''} ${!bulkActionMode && focusedIndex === index ? 'ring-2 ring-offset-2 ring-primary' : ''}`}
@@ -1478,6 +1658,62 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
                           {noteTag.tags.name}
                         </span>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Action Items (Logged-in) */}
+                  {note.actions && Array.isArray(note.actions) && note.actions.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Action Items</p>
+                      <ul className="space-y-1">
+                        {note.actions.map((a, i) => (
+                          <li key={`${note.id}-a-${i}`} className="flex items-center justify-between gap-2 text-sm">
+                            <div className="flex items-center gap-2">
+                              <span>{getActionTask(a)}</span>
+                              {a.datetime && (
+                                <span className="text-xs text-muted-foreground">({new Date(a.datetime).toLocaleString()})</span>
+                              )}
+                            </div>
+                            {a.datetime && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" aria-label="Add to Calendar">
+                                    <Calendar className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {(() => {
+                                    const links = generateCalendarLinks({
+                                      task: getActionTask(a),
+                                      datetime: a.datetime!,
+                                      description: note.summary.slice(0, 100)
+                                    });
+                                    return (
+                                      <>
+                                        <DropdownMenuItem asChild>
+                                          <a href={links.google} target="_blank" rel="noopener noreferrer">Google Calendar</a>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild>
+                                          <a href={links.outlook} target="_blank" rel="noopener noreferrer">Outlook.com</a>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild>
+                                          <a href={links.office365} target="_blank" rel="noopener noreferrer">Office 365</a>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild>
+                                          <a href={links.yahoo} target="_blank" rel="noopener noreferrer">Yahoo Calendar</a>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => downloadICS(getActionTask(a), a.datetime!, 60, note.summary.slice(0, 100))}>
+                                          Download ICS
+                                        </DropdownMenuItem>
+                                      </>
+                                    );
+                                  })()}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
                 </CardHeader>

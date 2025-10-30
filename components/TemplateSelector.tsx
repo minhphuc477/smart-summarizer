@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { FileText, Star, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 type Template = {
   id: string;
@@ -132,9 +133,12 @@ export default function TemplateSelector({ onSelectTemplate }: TemplateSelectorP
       if (response.ok) {
         const data = await response.json();
         setTemplates(data.templates);
+      } else {
+        toast.error('Failed to load templates');
       }
     } catch (error) {
       console.error('Error loading templates:', error);
+      toast.error('Error loading templates');
     } finally {
       setLoading(false);
     }
@@ -143,16 +147,23 @@ export default function TemplateSelector({ onSelectTemplate }: TemplateSelectorP
   const handleSelectTemplate = (template: Template) => {
     onSelectTemplate(template);
     setOpen(false);
+    toast.success(`Template "${template.name}" applied`);
   };
 
   const deleteTemplate = async (templateId: string) => {
     try {
-      await fetch(`/api/templates/${templateId}`, {
+      const response = await fetch(`/api/templates/${templateId}`, {
         method: 'DELETE',
       });
-      loadTemplates();
+      if (response.ok) {
+        toast.success('Template deleted');
+        loadTemplates();
+      } else {
+        toast.error('Failed to delete template');
+      }
     } catch (error) {
       console.error('Error deleting template:', error);
+      toast.error('Error deleting template');
     }
   };
 

@@ -21,7 +21,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Save, Trash2, Star, User } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Save, Trash2, Star, User, Info } from 'lucide-react';
 
 interface Persona {
   id: string;
@@ -234,17 +240,40 @@ export function PersonaManager({
           ) : (
             filteredPersonas.map((persona) => (
               <SelectItem key={persona.id} value={persona.id}>
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    {persona.is_default && <Star className="h-3 w-3 fill-current text-yellow-500" />}
-                    <span className="font-medium">{persona.name}</span>
-                  </div>
-                  {persona.description && (
-                    <span className="text-xs text-muted-foreground">
-                      {persona.description}
-                    </span>
-                  )}
-                </div>
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex flex-col gap-1 cursor-pointer">
+                        <div className="flex items-center gap-2">
+                          {persona.is_default && <Star className="h-3 w-3 fill-current text-yellow-500" />}
+                          <span className="font-medium">{persona.name}</span>
+                          <Info className="h-3 w-3 text-muted-foreground" />
+                        </div>
+                        {persona.description && (
+                          <span className="text-xs text-muted-foreground line-clamp-1">
+                            {persona.description}
+                          </span>
+                        )}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-md">
+                      <div className="space-y-2">
+                        <p className="font-semibold">{persona.name}</p>
+                        {persona.description && (
+                          <p className="text-xs text-muted-foreground">{persona.description}</p>
+                        )}
+                        <div className="pt-2 border-t">
+                          <p className="text-xs font-medium mb-1">Prompt:</p>
+                          <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                            {persona.prompt.length > 200 
+                              ? `${persona.prompt.slice(0, 200)}...` 
+                              : persona.prompt}
+                          </p>
+                        </div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </SelectItem>
             ))
           )}

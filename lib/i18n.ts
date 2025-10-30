@@ -15,6 +15,8 @@ const resources = {
       "create": "Create",
       "search": "Search",
       "filter": "Filter",
+      "clear": "Clear",
+      "searching": "Searching...",
       
       // App specific
       "smartNoteSummarizer": "Smart Note Summarizer",
@@ -33,6 +35,13 @@ const resources = {
       "analytics": "Analytics",
       "canvas": "Canvas",
       "settings": "Settings",
+      
+      // Search
+      "semanticSearch": "Semantic Search",
+      "semanticSearchDescription": "Search your notes by meaning, not just keywords. Try asking questions like \"What meetings did I have?\" or \"Show me urgent tasks\"",
+      "searchPlaceholder": "Search your notes by meaning...",
+      "minSimilarity": "Min similarity",
+      "minSimilarityThreshold": "Minimum similarity threshold",
       
       // Guest mode
       "guestMode": "Guest Mode",
@@ -78,6 +87,8 @@ const resources = {
       "create": "Tạo",
       "search": "Tìm kiếm",
       "filter": "Lọc",
+      "clear": "Xóa",
+      "searching": "Đang tìm...",
       
       // App specific
       "smartNoteSummarizer": "Tóm Tắt Ghi Chú Thông Minh",
@@ -96,6 +107,13 @@ const resources = {
       "analytics": "Phân Tích",
       "canvas": "Bảng Vẽ",
       "settings": "Cài Đặt",
+      
+      // Search
+      "semanticSearch": "Tìm Kiếm Ngữ Nghĩa",
+      "semanticSearchDescription": "Tìm kiếm ghi chú của bạn theo ý nghĩa, không chỉ từ khóa. Thử đặt câu hỏi như \"Tôi đã có những cuộc họp nào?\" hoặc \"Hiển thị công việc khẩn cấp\"",
+      "searchPlaceholder": "Tìm kiếm ghi chú theo ý nghĩa...",
+      "minSimilarity": "Độ tương đồng tối thiểu",
+      "minSimilarityThreshold": "Ngưỡng độ tương đồng tối thiểu",
       
       // Guest mode
       "guestMode": "Chế Độ Khách",

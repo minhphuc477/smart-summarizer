@@ -87,6 +87,8 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const [inputMode, setInputMode] = useState<'text' | 'url'>('text');
   const [urlInput, setUrlInput] = useState('');
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [isValidUrl, setIsValidUrl] = useState(false);
 
   // Hook cho Text-to-Speech
   const { speak, stop, isSpeaking, isSupported } = useSpeech();
@@ -97,6 +99,88 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
       setRemainingUses(getRemainingUsage());
     }
   });
+
+  // Validate URL in real-time
+  useEffect(() => {
+    if (!urlInput.trim()) {
+      setUrlError(null);
+      setIsValidUrl(false);
+      return;
+    }
+
+    try {
+      const parsed = new URL(urlInput);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        setUrlError(null);
+        setIsValidUrl(true);
+      } else {
+        setUrlError('URL must start with http:// or https://');
+        setIsValidUrl(false);
+      }
+    } catch {
+      setUrlError('Please enter a valid URL');
+      setIsValidUrl(false);
+    }
+  }, [urlInput]);
+
+  // Auto-save draft for guest users
+  useEffect(() => {
+    if (isGuestMode && (notes || customPersona || result)) {
+      sessionStorage.setItem('guestDraft', JSON.stringify({ 
+        notes, 
+        customPersona, 
+        result,
+        timestamp: Date.now()
+      }));
+    }
+  }, [notes, customPersona, result, isGuestMode]);
+
+  // Restore draft after sign-in
+  useEffect(() => {
+    if (!isGuestMode && session) {
+      const draft = sessionStorage.getItem('guestDraft');
+      if (draft) {
+        try {
+          const { notes: savedNotes, customPersona: savedPersona, timestamp } = JSON.parse(draft);
+          // Only restore if draft is less than 24 hours old
+          if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
+            if (savedNotes) setNotes(savedNotes);
+            if (savedPersona) setCustomPersona(savedPersona);
+            toast.success('Welcome back! Your draft has been restored.');
+            sessionStorage.removeItem('guestDraft');
+          }
+        } catch (e) {
+          console.error('Failed to restore draft:', e);
+        }
+      }
+    }
+  }, [session, isGuestMode]);
+
+  // Auto-detect URLs in notes and suggest switching to URL mode
+  const [detectedUrl, setDetectedUrl] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (inputMode === 'text' && notes.trim()) {
+      const urlPattern = /(https?:\/\/[^\s]+)/g;
+      const matches = notes.match(urlPattern);
+      if (matches && matches.length > 0) {
+        setDetectedUrl(matches[0]);
+      } else {
+        setDetectedUrl(null);
+      }
+    } else {
+      setDetectedUrl(null);
+    }
+  }, [notes, inputMode]);
+
+  const handleSwitchToUrlMode = () => {
+    if (detectedUrl) {
+      setInputMode('url');
+      setUrlInput(detectedUrl);
+      setNotes('');
+      setDetectedUrl(null);
+    }
+  };
 
   // Hàm lấy emoji cho sentiment
   const getSentimentEmoji = (sentiment?: string) => {
@@ -344,43 +428,73 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
   // Keyboard shortcuts
   // - Ctrl+Enter or Ctrl+S: summarize/submit (when eligible)
   // - Ctrl+N: new note (clear current input)
+  // - Ctrl+P: open persona selector
+  // - Ctrl+K: open search (for logged-in users)
   const submitRef = useRef(handleSubmit);
+  const personaButtonRef = useRef<HTMLButtonElement>(null);
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
+  
   useEffect(() => {
     submitRef.current = handleSubmit;
   });
 
-  const shortcuts = useMemo(() => [
-    {
-      key: 'Enter',
-      ctrl: true,
-      callback: () => {
-        if (!isLoading && ((inputMode === 'text' && notes.trim()) || (inputMode === 'url' && urlInput.trim()))) {
-          submitRef.current?.();
+  const shortcuts = useMemo(() => {
+    const baseShortcuts = [
+      {
+        key: 'Enter',
+        ctrl: true,
+        callback: () => {
+          if (!isLoading && ((inputMode === 'text' && notes.trim()) || (inputMode === 'url' && urlInput.trim()))) {
+            submitRef.current?.();
+          }
+        },
+        description: 'Summarize',
+      },
+      {
+        ...commonShortcuts.save,
+        callback: () => {
+          if (!isLoading && ((inputMode === 'text' && notes.trim()) || (inputMode === 'url' && urlInput.trim()))) {
+            submitRef.current?.();
+          }
         }
       },
-      description: 'Summarize',
-    },
-    {
-      ...commonShortcuts.save,
-      callback: () => {
-        if (!isLoading && ((inputMode === 'text' && notes.trim()) || (inputMode === 'url' && urlInput.trim()))) {
-          submitRef.current?.();
+      {
+        ...commonShortcuts.newNote,
+        callback: () => {
+          if (inputMode === 'text') {
+            setNotes('');
+          } else {
+            setUrlInput('');
+          }
+          setResult(null);
+          setError(null);
         }
+      },
+      {
+        key: 'p',
+        ctrl: true,
+        callback: () => {
+          personaButtonRef.current?.click();
+        },
+        description: 'Open persona selector'
       }
-    },
-    {
-      ...commonShortcuts.newNote,
-      callback: () => {
-        if (inputMode === 'text') {
-          setNotes('');
-        } else {
-          setUrlInput('');
-        }
-        setResult(null);
-        setError(null);
-      }
-    },
-  ], [inputMode, isLoading, notes, urlInput]);
+    ];
+
+    // Add search shortcut only for logged-in users
+    if (!isGuestMode && session) {
+      baseShortcuts.push({
+        key: 'k',
+        ctrl: true,
+        callback: () => {
+          searchButtonRef.current?.click();
+        },
+        description: 'Open semantic search'
+      });
+    }
+
+    return baseShortcuts;
+  }, [inputMode, isLoading, notes, urlInput, isGuestMode, session]);
+  
   useKeyboardShortcuts(shortcuts);
   
   return (
@@ -484,11 +598,18 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
             
             {/* Persona Manager - for authenticated users */}
             {!isGuestMode && (
-              <PersonaManager
-                currentPersona={customPersona}
-                onSelectPersona={setCustomPersona}
-                userId={session?.user?.id}
-              />
+              <div ref={(el) => {
+                if (el) {
+                  const selectTrigger = el.querySelector('[role="combobox"]') as HTMLButtonElement;
+                  if (selectTrigger) personaButtonRef.current = selectTrigger;
+                }
+              }}>
+                <PersonaManager
+                  currentPersona={customPersona}
+                  onSelectPersona={setCustomPersona}
+                  userId={session?.user?.id}
+                />
+              </div>
             )}
             
             <div className="flex flex-wrap gap-3 mt-2 items-start">
@@ -571,7 +692,8 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
           
           {/* Conditional Input: Text or URL */}
           {inputMode === 'text' ? (
-            <div className="relative">
+            <div className="space-y-3">
+              <div className="relative">
          <Textarea
            placeholder={t('pasteYourNotes')}
                 className="min-h-[280px] text-base p-4 w-full"
@@ -588,6 +710,35 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
                 > 
                   <X className="h-4 w-4" />
                 </Button>
+              )}
+              </div>
+              
+              {/* URL Detection Hint */}
+              {detectedUrl && (
+                <Alert className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950">
+                  <Link className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <AlertTitle className="text-blue-800 dark:text-blue-200">URL Detected</AlertTitle>
+                  <AlertDescription className="text-blue-700 dark:text-blue-300">
+                    <p className="mb-2">We detected a URL in your notes: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{detectedUrl.slice(0, 50)}{detectedUrl.length > 50 ? '...' : ''}</code></p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={handleSwitchToUrlMode}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        Switch to URL Mode
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setDetectedUrl(null)}
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  </AlertDescription>
+                </Alert>
               )}
           </div>
           ) : (
@@ -612,6 +763,53 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
                   </Button>
                 )}
               </div>
+              
+              {/* URL Preview Card */}
+              {urlInput && (
+                <Card className={`border-2 transition-colors ${
+                  isValidUrl 
+                    ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950' 
+                    : urlError 
+                    ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950' 
+                    : 'border-gray-200 dark:border-gray-800'
+                }`}>
+                  <CardContent className="pt-4">
+                    <div className="flex items-start gap-3">
+                      {isValidUrl ? (
+                        <div className="flex-shrink-0 mt-0.5">
+                          <div className="h-8 w-8 rounded-full bg-green-500 flex items-center justify-center">
+                            <Link className="h-4 w-4 text-white" />
+                          </div>
+                        </div>
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        {isValidUrl ? (
+                          <>
+                            <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                              Ready to summarize
+                            </p>
+                            <p className="text-xs text-green-700 dark:text-green-300 mt-1 break-all">
+                              {urlInput}
+                            </p>
+                          </>
+                        ) : urlError ? (
+                          <>
+                            <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                              {urlError}
+                            </p>
+                            <p className="text-xs text-red-700 dark:text-red-300 mt-1">
+                              Please check the URL format
+                            </p>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              
               <p className="text-xs text-muted-foreground">
                 Enter a URL to extract and summarize its content. Works with articles, blog posts, and most web pages.
               </p>
@@ -644,7 +842,7 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
             size="lg"
             className="w-full text-lg font-semibold bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400"
             onClick={handleSubmit}
-            disabled={isLoading || (inputMode === 'text' ? !notes.trim() : !urlInput.trim())}
+            disabled={isLoading || (inputMode === 'text' ? !notes.trim() : (!urlInput.trim() || !isValidUrl))}
             aria-label="Summarize"
           >
             {isLoading ? "Processing..." : inputMode === 'url' ? 'Summarize URL' : t('summarize')}
@@ -949,7 +1147,23 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
         )}
 
         {/* === TÌM KIẾM THEO NGỮ NGHĨA === */}
-        {!isGuestMode && <SearchBar userId={session.user.id} />}
+        {!isGuestMode && (
+          <div ref={(el) => {
+            if (el) {
+              const searchInput = el.querySelector('input[type="text"]') as HTMLInputElement;
+              if (searchInput) {
+                // Create a virtual button that focuses the search input
+                const virtualButton = document.createElement('button');
+                virtualButton.style.display = 'none';
+                virtualButton.onclick = () => searchInput.focus();
+                searchButtonRef.current = virtualButton;
+                el.appendChild(virtualButton);
+              }
+            }
+          }}>
+            <SearchBar userId={session.user.id} />
+          </div>
+        )}
         </div>
       </div>
     {!isGuestMode && (

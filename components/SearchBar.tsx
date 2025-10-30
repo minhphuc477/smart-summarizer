@@ -2,6 +2,7 @@
 
 import { useRef, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +29,7 @@ type SearchBarProps = {
 
 export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
   const router = useRouter();
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -35,6 +37,8 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
+  // Min similarity threshold (0.50 - 1.00). Stored as 0-1 float, UI shows %
+  const [minSimilarity, setMinSimilarity] = useState(0.75);
   const [recentSearches, setRecentSearches] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem('recent_searches');
@@ -68,14 +72,17 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
           userId: userId,
           folderId: folderId,
           matchCount: 5,
-          matchThreshold: 0.75
+          // Use current threshold so server filters early
+          matchThreshold: Math.max(0.5, Math.min(0.99, minSimilarity))
         })
       });
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || 'Search failed');
       }
-      setSearchResults(data.results || []);
+      // Also filter client-side defensively in case backend returns wider set
+      const results = (data.results || []).filter((r: SearchResult) => (r.similarity ?? 0) >= minSimilarity);
+      setSearchResults(results);
       // Save recent search
       try {
         const next = [query, ...recentSearches.filter(q => q !== query)].slice(0, 5);
@@ -108,6 +115,17 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
       setSearchResults([]);
       setHasSearched(false);
       setError(null);
+    }
+  };
+
+  // When user adjusts similarity slider, re-run search if we have an active query
+  const handleSimilarityChange = (value: number) => {
+    const clamped = Math.max(0.5, Math.min(1, value));
+    setMinSimilarity(clamped);
+    // If user has already searched and query present, refresh results immediately
+    if (searchQuery.trim()) {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      handleSearch(searchQuery);
     }
   };
 
@@ -250,18 +268,18 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
     <div className="mt-10 space-y-4">
       <div className="flex items-center gap-2 mb-4">
         <Search className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-2xl font-bold text-foreground">Semantic Search</h2>
+        <h2 className="text-2xl font-bold text-foreground">{t('semanticSearch') || 'Semantic Search'}</h2>
       </div>
       
       <p className="text-sm text-muted-foreground mb-4">
-        Search your notes by meaning, not just keywords. Try asking questions like &quot;What meetings did I have?&quot; or &quot;Show me urgent tasks&quot;
+        {t('semanticSearchDescription') || 'Search your notes by meaning, not just keywords. Try asking questions like "What meetings did I have?" or "Show me urgent tasks"'}
       </p>
 
       {/* Search Input */}
   <form onSubmit={(e) => { e.preventDefault(); if (debounceTimer.current) clearTimeout(debounceTimer.current); handleSearch(searchQuery); }} className="relative">
         <Input
           type="text"
-          placeholder="Search your notes by meaning..."
+          placeholder={t('searchPlaceholder') || 'Search your notes by meaning...'}
           className="w-full pr-20"
           value={searchQuery}
           onChange={handleInputChange}
@@ -277,7 +295,7 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
               size="icon"
               onClick={clearSearch}
               className="h-8 w-8"
-              aria-label="X"
+              aria-label={t('clear') || 'Clear'}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -288,10 +306,29 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
             disabled={isSearching || !searchQuery.trim()}
             className="h-8"
           >
-            {isSearching ? "Searching..." : "Search"}
+            {isSearching ? (t('searching') || 'Searching...') : (t('search') || 'Search')}
           </Button>
         </div>
       </form>
+
+      {/* Similarity threshold */}
+      <div className="mt-3 flex items-center gap-3">
+        <label className="text-xs text-muted-foreground whitespace-nowrap">
+          {t('minSimilarity') || 'Min similarity'}
+        </label>
+        <input
+          type="range"
+          min={50}
+          max={100}
+          step={5}
+          value={Math.round(minSimilarity * 100)}
+          onChange={(e) => handleSimilarityChange(Number(e.target.value) / 100)}
+          aria-label={t('minSimilarityThreshold') || 'Minimum similarity threshold'}
+        />
+        <span className="text-xs text-muted-foreground w-14">
+          ≥ {Math.round(minSimilarity * 100)}%
+        </span>
+      </div>
 
       {/* Recent Searches */}
       {isInputFocused && !searchQuery.trim() && recentSearches.length > 0 && (

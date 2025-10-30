@@ -19,13 +19,16 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useKeyboardShortcuts, commonShortcuts } from '@/lib/useKeyboardShortcuts';
 import { Input } from '@/components/ui/input';
-import { Save, Plus, Download, FileJson, Share2, Image as ImageIcon } from 'lucide-react';
+import { Save, Plus, Download, FileJson, Share2, Image as ImageIcon, Sparkles, Network, Grid3x3, Circle, GitBranch } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import { applyLayout, type LayoutType } from '@/lib/canvasLayouts';
 
 type CanvasEditorProps = {
   canvasId?: string;
@@ -65,6 +68,7 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [title, setTitle] = useState('Untitled Canvas');
   const [saving, setSaving] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [currentCanvasId, setCurrentCanvasId] = useState(canvasId);
   const canvasRef = useRef<HTMLDivElement>(null);
   const undoStack = useRef<Array<{ nodes: Node[]; edges: Edge[]; title: string }>>([]);
@@ -201,7 +205,76 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
         height: 150,
       },
     };
+    pushUndo();
     setNodes((nds) => [...nds, newNode]);
+    toast.success('Note added');
+  };
+
+  const handleAutoLayout = (layoutType: LayoutType) => {
+    if (nodes.length === 0) {
+      toast.error('Add some nodes first');
+      return;
+    }
+
+    pushUndo();
+    const layouted = applyLayout(layoutType, [...nodes], edges);
+    setNodes(layouted);
+    
+    const layoutNames = {
+      tree: 'Tree',
+      force: 'Force-Directed',
+      grid: 'Grid',
+      circular: 'Circular',
+      hierarchical: 'Hierarchical'
+    };
+    toast.success(`${layoutNames[layoutType]} layout applied`);
+  };
+
+  const getAISuggestions = async () => {
+    if (nodes.length === 0) {
+      toast.error('Add some nodes first to get AI suggestions');
+      return;
+    }
+
+    setLoadingSuggestions(true);
+    try {
+      const response = await fetch('/api/canvas/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nodes: nodes.map(n => ({ id: n.id, data: n.data })),
+          edges,
+          context: title
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get suggestions');
+      }
+
+      const data = await response.json();
+      const { suggestions } = data;
+
+      // Show suggestions in a toast with interactive options
+      if (suggestions.relatedConcepts && suggestions.relatedConcepts.length > 0) {
+        toast.success(`AI found ${suggestions.relatedConcepts.length} related concepts!`, {
+          description: 'Check the console for details (UI coming soon)',
+          duration: 5000
+        });
+        console.log('AI Suggestions:', suggestions);
+        
+        // For now, just log. In future, show in a modal with "Add" buttons
+        // TODO: Create SuggestionsDialog component
+      } else {
+        toast.info('No new suggestions at this time');
+      }
+
+    } catch (error) {
+      console.error('Error getting AI suggestions:', error);
+      toast.error('Failed to get AI suggestions');
+    } finally {
+      setLoadingSuggestions(false);
+    }
   };
 
   const saveCanvas = async () => {
@@ -412,6 +485,55 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
             <Plus className="h-4 w-4 mr-2" />
             Add Note
           </Button>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Sparkles className="h-4 w-4 mr-2" />
+                Auto-Layout
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuLabel>Smart Layouts</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleAutoLayout('tree')}>
+                <GitBranch className="h-4 w-4 mr-2" />
+                Tree Layout
+                <span className="ml-auto text-xs text-muted-foreground">Hierarchical</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAutoLayout('force')}>
+                <Network className="h-4 w-4 mr-2" />
+                Force-Directed
+                <span className="ml-auto text-xs text-muted-foreground">Organic</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAutoLayout('hierarchical')}>
+                <GitBranch className="h-4 w-4 mr-2 rotate-90" />
+                Hierarchical
+                <span className="ml-auto text-xs text-muted-foreground">Layered</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAutoLayout('grid')}>
+                <Grid3x3 className="h-4 w-4 mr-2" />
+                Grid Layout
+                <span className="ml-auto text-xs text-muted-foreground">Organized</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAutoLayout('circular')}>
+                <Circle className="h-4 w-4 mr-2" />
+                Circular Layout
+                <span className="ml-auto text-xs text-muted-foreground">Radial</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button 
+            onClick={getAISuggestions} 
+            variant="outline" 
+            size="sm"
+            disabled={loadingSuggestions}
+          >
+            <Sparkles className="h-4 w-4 mr-2" />
+            {loadingSuggestions ? 'Thinking...' : 'AI Suggest'}
+          </Button>
+          
           <Button onClick={saveCanvas} disabled={saving} size="sm">
             <Save className="h-4 w-4 mr-2" />
             {saving ? 'Saving...' : 'Save'}
