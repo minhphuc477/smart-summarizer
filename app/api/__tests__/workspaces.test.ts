@@ -17,16 +17,30 @@ jest.mock('@/lib/supabase', () => {
 
 describe('GET /api/workspaces', () => {
   test('requires authentication', async () => {
+    const { getServerSupabase } = require('@/lib/supabaseServer');
+    // Unauthenticated user
+    getServerSupabase.mockResolvedValue({
+      auth: { getUser: jest.fn(async () => ({ data: { user: null }, error: null })) },
+      from: jest.fn(() => ({ select: () => ({ data: [], error: null }) }))
+    });
     const response = await GET();
     expect([401, 500]).toContain(response.status);
   });
 
   test('returns workspace list for authenticated user', async () => {
-    const { supabase } = require('@/lib/supabase');
-    supabase.auth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-1' } } }, error: null });
-    supabase.from.mockImplementationOnce(() => ({
-      select: () => ({ eq: () => ({ order: () => ({ data: [{ id: 'w1', name: 'Workspace' }], error: null }) }) })
-    }));
+    const { getServerSupabase } = require('@/lib/supabaseServer');
+    // Authenticated user and workspace data
+    getServerSupabase.mockResolvedValue({
+      auth: { getUser: jest.fn(async () => ({ data: { user: { id: 'user-1' } }, error: null })) },
+      from: jest.fn((table: string) => {
+        if (table === 'user_workspaces') {
+          return {
+            select: () => ({ eq: () => ({ order: () => ({ data: [{ id: 'w1', name: 'Workspace', user_id: 'user-1' }], error: null }) }) })
+          } as any;
+        }
+        return { select: () => ({ data: [], error: null }) } as any;
+      })
+    });
 
     const response = await GET();
     expect(response.status).toBeLessThan(500);
