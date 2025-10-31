@@ -1,6 +1,8 @@
 import { GET as GET_FOLDERS } from '@/app/api/folders/route';
 import { GET as GET_CANVAS } from '@/app/api/canvases/[id]/route';
 
+jest.mock('@/lib/supabaseServer');
+
 jest.mock('@/lib/supabase', () => {
   const auth = { getSession: jest.fn().mockResolvedValue({ data: { session: null }, error: null }) };
   const from = jest.fn((table: string) => {

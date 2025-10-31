@@ -1,5 +1,7 @@
 import { GET, POST } from '@/app/api/canvases/route';
 
+jest.mock('@/lib/supabaseServer');
+
 jest.mock('@/lib/supabase', () => {
   const auth = { getSession: jest.fn().mockResolvedValue({ data: { session: { user: { id: 'u1' } } }, error: null }) };
   const from = jest.fn((table: string) => {

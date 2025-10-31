@@ -1,5 +1,18 @@
 'use client';
 
+/**
+ * PersonaManager Component
+ * 
+ * Manages AI personas for summarization with:
+ * - Preset personas (Professional, Student, Meeting, Brainstormer)
+ * - Custom saved personas with CRUD operations
+ * - Default persona selection
+ * 
+ * UX Note: Long persona names are truncated with ellipsis to prevent overflow.
+ * Applied Tailwind classes: truncate, min-w-0, max-w-full, flex-shrink-0
+ * To adjust truncation, modify the max-w-* classes on persona name spans.
+ */
+
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -253,10 +266,10 @@ export function PersonaManager({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap min-w-0">
         {/* Persona Selector */}
         <Select value={selectedPersonaId} onValueChange={handleSelectPersona}>
-          <SelectTrigger className="w-[220px]">
+          <SelectTrigger className="w-full sm:w-[260px] max-w-full min-w-0 overflow-hidden">
             <User className="h-4 w-4 mr-2" />
             <SelectValue placeholder="Select Persona" />
           </SelectTrigger>
@@ -281,10 +294,10 @@ export function PersonaManager({
                 </SelectItem>
                 {filteredPresets.map((preset) => (
                   <SelectItem key={preset.id} value={preset.id}>
-                    <div className="flex flex-col gap-1 cursor-pointer">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{preset.name}</span>
-                        <Info className="h-3 w-3 text-muted-foreground" />
+                    <div className="flex flex-col gap-1 cursor-pointer min-w-0 max-w-full">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-medium truncate">{preset.name}</span>
+                        <Info className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                       </div>
                       <span className="text-xs text-muted-foreground line-clamp-1">
                         {preset.description}
@@ -306,13 +319,13 @@ export function PersonaManager({
                     <TooltipProvider delayDuration={300}>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="flex flex-col gap-1 cursor-pointer">
-                            <div className="flex items-center gap-2">
+                          <div className="flex flex-col gap-1 cursor-pointer min-w-0 max-w-full">
+                            <div className="flex items-center gap-2 min-w-0">
                               {persona.is_default && (
-                                <Star className="h-3 w-3 fill-current text-yellow-500" />
+                                <Star className="h-3 w-3 fill-current text-yellow-500 flex-shrink-0" />
                               )}
-                              <span className="font-medium">{persona.name}</span>
-                              <Info className="h-3 w-3 text-muted-foreground" />
+                              <span className="font-medium truncate">{persona.name}</span>
+                              <Info className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                             </div>
                             {persona.description && (
                               <span className="text-xs text-muted-foreground line-clamp-1">
@@ -463,26 +476,26 @@ export function PersonaManager({
                     key={persona.id}
                     className="border rounded-lg p-4 space-y-2"
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-medium">{persona.name}</h4>
+                    <div className="flex items-start justify-between gap-4 min-w-0">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <h4 className="font-medium truncate">{persona.name}</h4>
                           {persona.is_default && (
-                            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
+                            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded flex-shrink-0">
                               Default
                             </span>
                           )}
                         </div>
                         {persona.description && (
-                          <p className="text-sm text-muted-foreground mt-1">
+                          <p className="text-sm text-muted-foreground mt-1 break-words">
                             {persona.description}
                           </p>
                         )}
-                        <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
+                        <p className="text-xs text-muted-foreground mt-2 line-clamp-2 break-words">
                           {persona.prompt}
                         </p>
                       </div>
-                      <div className="flex items-center gap-1 ml-4">
+                      <div className="flex items-center gap-1 flex-shrink-0">
                         {!persona.is_default && (
                           <Button
                             variant="ghost"

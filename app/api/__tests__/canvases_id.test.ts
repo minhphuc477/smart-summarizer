@@ -2,6 +2,8 @@ import { GET, PATCH, DELETE } from '@/app/api/canvases/[id]/route';
 
 type QueryBuilder = any;
 
+jest.mock('@/lib/supabaseServer');
+
 jest.mock('@/lib/supabase', () => {
   const auth = { getSession: jest.fn().mockResolvedValue({ data: { session: { user: { id: 'owner' } } }, error: null }) };
 

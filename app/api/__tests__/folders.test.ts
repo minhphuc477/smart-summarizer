@@ -1,5 +1,7 @@
 import { GET, POST } from '../folders/route';
 
+jest.mock('@/lib/supabaseServer');
+
 // Mock the supabase singleton used by the route
 jest.mock('@/lib/supabase', () => {
   const auth = { getSession: jest.fn().mockResolvedValue({ data: { session: { user: { id: 'user-1' } } } }) };

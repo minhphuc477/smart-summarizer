@@ -1,5 +1,9 @@
 import { GET, POST } from '@/app/api/analytics/route';
 
+// Use the auto-mock from __mocks__/supabaseServer.ts
+jest.mock('@/lib/supabaseServer');
+
+// Legacy mock for old client-based code (not used by analytics route anymore)
 jest.mock('@/lib/supabase', () => {
   const auth = { getSession: jest.fn().mockResolvedValue({ data: { session: { user: { id: 'u1' } } }, error: null }) };
   const from = jest.fn((table: string) => {

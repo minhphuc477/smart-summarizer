@@ -15,14 +15,6 @@ const nextConfig = {
     // Temporarily ignore ESLint errors during builds to allow development
     ignoreDuringBuilds: true,
   },
-  // Silence upcoming dev change by explicitly allowing common loopback origins
-  experimental: {
-    allowedDevOrigins: [
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      'http://0.0.0.0:3000'
-    ]
-  },
 };
 
 export default withPWA(nextConfig);
