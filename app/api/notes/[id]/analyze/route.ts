@@ -7,7 +7,7 @@ type Params = { params: Promise<{ id: string }> };
 // POST: Analyze a note's content to (re)generate tags and sentiment (owner only)
 export async function POST(_req: NextRequest, props: Params) {
   const { id } = await props.params;
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
 
   try {
   const { data: { session } } = await supabase.auth.getSession();

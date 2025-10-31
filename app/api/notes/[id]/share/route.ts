@@ -13,7 +13,7 @@ export async function PATCH(request: NextRequest, props: Params) {
   const params = await props.params;
   const { id } = params;
   try {
-    const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

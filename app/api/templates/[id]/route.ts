@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getServerSupabase } from '@/lib/supabaseServer';
 
 type Params = {
   params: Promise<{
@@ -12,8 +12,9 @@ export async function GET(request: NextRequest, props: Params) {
   const params = await props.params;
   const { id } = params;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const supabase = await getServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest, props: Params) {
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: String((error as { message?: string }).message || 'Error') }, { status: 500 });
     }
 
     return NextResponse.json({ template });
@@ -39,8 +40,9 @@ export async function POST(request: NextRequest, props: Params) {
   const params = await props.params;
   const { id } = params;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const supabase = await getServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -61,21 +63,21 @@ export async function POST(request: NextRequest, props: Params) {
 
     const { data: template, error } = await supabase
       .from('templates')
-      .update({ usage_count: (current.usage_count || 0) + 1 })
+      .update({ usage_count: ((current as { usage_count: number | null }).usage_count || 0) + 1 })
       .eq('id', id)
       .select()
       .single();
 
     if (error) {
       console.error('Error updating template:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: String((error as { message?: string }).message || 'Error') }, { status: 500 });
     }
 
     // Track analytics
     await supabase.from('usage_events').insert({
-      user_id: session.user.id,
+      user_id: user.id,
       event_type: 'template_used',
-      event_data: { template_id: id, template_name: template.name },
+      event_data: { template_id: id, template_name: (template as { name: string }).name },
     });
 
     return NextResponse.json({ template });
@@ -90,8 +92,9 @@ export async function DELETE(request: NextRequest, props: Params) {
   const params = await props.params;
   const { id } = params;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const supabase = await getServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -103,7 +106,7 @@ export async function DELETE(request: NextRequest, props: Params) {
 
     if (error) {
       console.error('Error deleting template:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: String((error as { message?: string }).message || 'Error') }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });

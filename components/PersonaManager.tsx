@@ -44,6 +44,37 @@ interface PersonaManagerProps {
   userId?: string;
 }
 
+const PRESET_PERSONAS: Array<{ id: string; name: string; description: string; prompt: string }> = [
+  {
+    id: 'preset:professional',
+    name: 'Professional Summary',
+    description: 'Concise, structured, action-oriented summaries for work.',
+    prompt:
+      'You are a professional summarizer. Write concise, structured, actionable summaries with bullet points, decisions, and next steps. Be clear and neutral.',
+  },
+  {
+    id: 'preset:student',
+    name: 'Student Notes',
+    description: 'Explain like a teacher and add key takeaways.',
+    prompt:
+      'You are a helpful teacher. Explain concepts simply with examples. Include key takeaways and 2-3 practice questions.',
+  },
+  {
+    id: 'preset:meeting',
+    name: 'Meeting Minutes',
+    description: 'Agenda, decisions, action items with owners and due dates.',
+    prompt:
+      'You are a meeting assistant. Output sections: Agenda, Notes, Decisions, Action Items (Owner, Due, Task). Keep it crisp.',
+  },
+  {
+    id: 'preset:brainstorm',
+    name: 'Brainstormer',
+    description: 'Generate ideas with pros/cons and next steps.',
+    prompt:
+      'You are a creative facilitator. Generate diverse ideas. For each idea, include pros/cons and 1 next step. Be pragmatic.',
+  },
+];
+
 export function PersonaManager({
   currentPersona = '',
   onSelectPersona,
@@ -186,6 +217,14 @@ export function PersonaManager({
 
   const handleSelectPersona = (value: string) => {
     setSelectedPersonaId(value);
+    if (value.startsWith('preset:')) {
+      const preset = PRESET_PERSONAS.find((p) => p.id === value);
+      if (preset) {
+        onSelectPersona(preset.prompt);
+        toast.success(`Using preset: ${preset.name}`);
+      }
+      return;
+    }
     const persona = personas.find((p) => p.id === value);
     if (persona) {
       onSelectPersona(persona.prompt);
@@ -193,9 +232,12 @@ export function PersonaManager({
     }
   };
 
-  // Filter personas based on search query
+  // Filter personas based on search query (applies to both presets and saved)
+  const query = personaSearchQuery.toLowerCase().trim();
+  const filteredPresets = PRESET_PERSONAS.filter((p) =>
+    !query || p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.prompt.toLowerCase().includes(query)
+  );
   const filteredPersonas = personas.filter((persona) => {
-    const query = personaSearchQuery.toLowerCase().trim();
     if (!query) return true;
     return (
       persona.name.toLowerCase().includes(query) ||
@@ -212,15 +254,14 @@ export function PersonaManager({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-      {/* Persona Selector */}
-      <Select value={selectedPersonaId} onValueChange={handleSelectPersona}>
-        <SelectTrigger className="w-[200px]">
-          <User className="h-4 w-4 mr-2" />
-          <SelectValue placeholder="Select Persona" />
-        </SelectTrigger>
-        <SelectContent>
-          {/* Search Input */}
-          {personas.length > 0 && (
+        {/* Persona Selector */}
+        <Select value={selectedPersonaId} onValueChange={handleSelectPersona}>
+          <SelectTrigger className="w-[220px]">
+            <User className="h-4 w-4 mr-2" />
+            <SelectValue placeholder="Select Persona" />
+          </SelectTrigger>
+          <SelectContent>
+            {/* Search Input */}
             <div className="p-2 border-b">
               <Input
                 placeholder="Search personas..."
@@ -231,213 +272,245 @@ export function PersonaManager({
                 onKeyDown={(e) => e.stopPropagation()}
               />
             </div>
-          )}
-          
-          {filteredPersonas.length === 0 ? (
-            <div className="p-4 text-sm text-muted-foreground">
-              {personaSearchQuery ? 'No personas found' : 'No saved personas yet'}
-            </div>
-          ) : (
-            filteredPersonas.map((persona) => (
-              <SelectItem key={persona.id} value={persona.id}>
-                <TooltipProvider delayDuration={300}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex flex-col gap-1 cursor-pointer">
-                        <div className="flex items-center gap-2">
-                          {persona.is_default && <Star className="h-3 w-3 fill-current text-yellow-500" />}
-                          <span className="font-medium">{persona.name}</span>
-                          <Info className="h-3 w-3 text-muted-foreground" />
-                        </div>
-                        {persona.description && (
-                          <span className="text-xs text-muted-foreground line-clamp-1">
-                            {persona.description}
-                          </span>
-                        )}
+
+            {/* Presets */}
+            {filteredPresets.length > 0 && (
+              <>
+                <SelectItem value="__label_presets" disabled>
+                  Presets
+                </SelectItem>
+                {filteredPresets.map((preset) => (
+                  <SelectItem key={preset.id} value={preset.id}>
+                    <div className="flex flex-col gap-1 cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{preset.name}</span>
+                        <Info className="h-3 w-3 text-muted-foreground" />
                       </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" className="max-w-md">
-                      <div className="space-y-2">
-                        <p className="font-semibold">{persona.name}</p>
-                        {persona.description && (
-                          <p className="text-xs text-muted-foreground">{persona.description}</p>
-                        )}
-                        <div className="pt-2 border-t">
-                          <p className="text-xs font-medium mb-1">Prompt:</p>
-                          <p className="text-xs text-muted-foreground whitespace-pre-wrap">
-                            {persona.prompt.length > 200 
-                              ? `${persona.prompt.slice(0, 200)}...` 
-                              : persona.prompt}
-                          </p>
-                        </div>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </SelectItem>
-            ))
-          )}
-        </SelectContent>
-      </Select>
+                      <span className="text-xs text-muted-foreground line-clamp-1">
+                        {preset.description}
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </>
+            )}
 
-      {/* Save Current Persona Button */}
-      <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
-        <DialogTrigger asChild>
-          <Button variant="outline" size="sm">
-            <Save className="h-4 w-4 mr-2" />
-            Save Persona
-          </Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Save Current Persona</DialogTitle>
-            <DialogDescription>
-              Save the current persona prompt for quick reuse later
-            </DialogDescription>
-          </DialogHeader>
+            {/* Saved Personas */}
+            {filteredPersonas.length > 0 && (
+              <>
+                <SelectItem value="__label_saved" disabled>
+                  Saved
+                </SelectItem>
+                {filteredPersonas.map((persona) => (
+                  <SelectItem key={persona.id} value={persona.id}>
+                    <TooltipProvider delayDuration={300}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex flex-col gap-1 cursor-pointer">
+                            <div className="flex items-center gap-2">
+                              {persona.is_default && (
+                                <Star className="h-3 w-3 fill-current text-yellow-500" />
+                              )}
+                              <span className="font-medium">{persona.name}</span>
+                              <Info className="h-3 w-3 text-muted-foreground" />
+                            </div>
+                            {persona.description && (
+                              <span className="text-xs text-muted-foreground line-clamp-1">
+                                {persona.description}
+                              </span>
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-md">
+                          <div className="space-y-2">
+                            <p className="font-semibold">{persona.name}</p>
+                            {persona.description && (
+                              <p className="text-xs text-muted-foreground">{persona.description}</p>
+                            )}
+                            <div className="pt-2 border-t">
+                              <p className="text-xs font-medium mb-1">Prompt:</p>
+                              <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                                {persona.prompt.length > 200
+                                  ? `${persona.prompt.slice(0, 200)}...`
+                                  : persona.prompt}
+                              </p>
+                            </div>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </SelectItem>
+                ))}
+              </>
+            )}
 
-          <div className="space-y-4 py-4">
-            <div>
-              <label className="text-sm font-medium mb-2 block">
-                Persona Name *
-              </label>
-              <Input
-                placeholder="e.g., Professional Summary, Student Notes"
-                value={newPersona.name}
-                onChange={(e) =>
-                  setNewPersona({ ...newPersona, name: e.target.value })
-                }
-              />
-            </div>
+            {/* Empty State */}
+            {filteredPresets.length === 0 && filteredPersonas.length === 0 && (
+              <div className="p-4 text-sm text-muted-foreground">
+                {personaSearchQuery ? 'No personas found' : 'No personas available'}
+              </div>
+            )}
+          </SelectContent>
+        </Select>
 
-            <div>
-              <label className="text-sm font-medium mb-2 block">
-                Persona Prompt *
-              </label>
-              <Textarea
-                placeholder="The AI persona prompt..."
-                value={newPersona.prompt}
-                onChange={(e) =>
-                  setNewPersona({ ...newPersona, prompt: e.target.value })
-                }
-                rows={4}
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium mb-2 block">
-                Description (optional)
-              </label>
-              <Input
-                placeholder="Brief description of when to use this persona"
-                value={newPersona.description}
-                onChange={(e) =>
-                  setNewPersona({ ...newPersona, description: e.target.value })
-                }
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="is_default"
-                checked={newPersona.is_default}
-                onChange={(e) =>
-                  setNewPersona({ ...newPersona, is_default: e.target.checked })
-                }
-                className="h-4 w-4"
-              />
-              <label htmlFor="is_default" className="text-sm">
-                Set as default persona
-              </label>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsSaveDialogOpen(false)}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleSavePersona} disabled={isLoading}>
-              {isLoading ? 'Saving...' : 'Save Persona'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Manage Personas Dialog */}
-      {personas.length > 0 && (
-        <Dialog>
+        {/* Save Current Persona Button */}
+        <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
           <DialogTrigger asChild>
-            <Button variant="ghost" size="sm">
-              Manage
+            <Button variant="outline" size="sm">
+              <Save className="h-4 w-4 mr-2" />
+              Save Persona
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle>Manage Saved Personas</DialogTitle>
+              <DialogTitle>Save Current Persona</DialogTitle>
               <DialogDescription>
-                View, delete, or set default personas
+                Save the current persona prompt for quick reuse later
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-2 max-h-[400px] overflow-y-auto">
-              {personas.map((persona) => (
-                <div
-                  key={persona.id}
-                  className="border rounded-lg p-4 space-y-2"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-medium">{persona.name}</h4>
-                        {persona.is_default && (
-                          <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
-                            Default
-                          </span>
+            <div className="space-y-4 py-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  Persona Name *
+                </label>
+                <Input
+                  placeholder="e.g., Professional Summary, Student Notes"
+                  value={newPersona.name}
+                  onChange={(e) =>
+                    setNewPersona({ ...newPersona, name: e.target.value })
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  Persona Prompt *
+                </label>
+                <Textarea
+                  placeholder="The AI persona prompt..."
+                  value={newPersona.prompt}
+                  onChange={(e) =>
+                    setNewPersona({ ...newPersona, prompt: e.target.value })
+                  }
+                  rows={4}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  Description (optional)
+                </label>
+                <Input
+                  placeholder="Brief description of when to use this persona"
+                  value={newPersona.description}
+                  onChange={(e) =>
+                    setNewPersona({ ...newPersona, description: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="is_default"
+                  checked={newPersona.is_default}
+                  onChange={(e) =>
+                    setNewPersona({ ...newPersona, is_default: e.target.checked })
+                  }
+                  className="h-4 w-4"
+                />
+                <label htmlFor="is_default" className="text-sm">
+                  Set as default persona
+                </label>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsSaveDialogOpen(false)}
+                disabled={isLoading}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleSavePersona} disabled={isLoading}>
+                {isLoading ? 'Saving...' : 'Save Persona'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Manage Personas Dialog */}
+        {personas.length > 0 && (
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="sm">
+                Manage
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Manage Saved Personas</DialogTitle>
+                <DialogDescription>
+                  View, delete, or set default personas
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {personas.map((persona) => (
+                  <div
+                    key={persona.id}
+                    className="border rounded-lg p-4 space-y-2"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium">{persona.name}</h4>
+                          {persona.is_default && (
+                            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
+                              Default
+                            </span>
+                          )}
+                        </div>
+                        {persona.description && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {persona.description}
+                          </p>
                         )}
-                      </div>
-                      {persona.description && (
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {persona.description}
+                        <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
+                          {persona.prompt}
                         </p>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
-                        {persona.prompt}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1 ml-4">
-                      {!persona.is_default && (
+                      </div>
+                      <div className="flex items-center gap-1 ml-4">
+                        {!persona.is_default && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleSetDefault(persona.id)}
+                            disabled={isLoading}
+                            title="Set as default"
+                          >
+                            <Star className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleSetDefault(persona.id)}
+                          onClick={() => handleDeletePersona(persona.id)}
                           disabled={isLoading}
-                          title="Set as default"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
-                          <Star className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeletePersona(persona.id)}
-                        disabled={isLoading}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
     </div>
   );

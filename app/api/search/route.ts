@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
     // 2. Gọi RPC function trên Supabase để tìm các ghi chú tương tự
     const searchStart = Date.now();
-    const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
     const useFolderRpc = folderId !== null && folderId !== undefined;
     const procName = useFolderRpc ? 'match_notes_by_folder' : 'match_notes';
     const rpcArgs: Record<string, unknown> = {

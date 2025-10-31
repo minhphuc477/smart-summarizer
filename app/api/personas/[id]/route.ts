@@ -13,7 +13,7 @@ export async function GET(
   props: Params
 ) {
   try {
-    const supabase = getServerSupabase();
+    const supabase = await getServerSupabase();
 
     const { id } = await props.params;
 
@@ -53,7 +53,7 @@ export async function PATCH(
   props: Params
 ) {
   try {
-    const supabase = getServerSupabase();
+    const supabase = await getServerSupabase();
 
     const { id } = await props.params;
 
@@ -114,7 +114,7 @@ export async function DELETE(
   props: Params
 ) {
   try {
-    const supabase = getServerSupabase();
+    const supabase = await getServerSupabase();
 
     const { id } = await props.params;
 

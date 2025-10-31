@@ -15,26 +15,26 @@ describe('SearchBar', () => {
     test('renders search input and button', () => {
       render(<SearchBar userId={mockUserId} />);
       
-      expect(screen.getByPlaceholderText(/Search your notes/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Search/i })).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('searchPlaceholder')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /search/i })).toBeInTheDocument();
     });
 
     test('displays semantic search heading', () => {
       render(<SearchBar userId={mockUserId} />);
       
-      expect(screen.getByText('Semantic Search')).toBeInTheDocument();
+      expect(screen.getByText('semanticSearch')).toBeInTheDocument();
     });
 
     test('displays helpful description', () => {
       render(<SearchBar userId={mockUserId} />);
       
-      expect(screen.getByText(/Search your notes by meaning/i)).toBeInTheDocument();
+      expect(screen.getByText('semanticSearchDescription')).toBeInTheDocument();
     });
 
     test('search button is disabled when input is empty', () => {
       render(<SearchBar userId={mockUserId} />);
       
-      const searchButton = screen.getByRole('button', { name: /Search/i });
+      const searchButton = screen.getByRole('button', { name: /search/i });
       expect(searchButton).toBeDisabled();
     });
   });
@@ -43,7 +43,7 @@ describe('SearchBar', () => {
     test('allows typing in search input', () => {
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i) as HTMLInputElement;
+      const input = screen.getByPlaceholderText('searchPlaceholder') as HTMLInputElement;
       fireEvent.change(input, { target: { value: 'meeting notes' } });
       
       expect(input.value).toBe('meeting notes');
@@ -52,31 +52,31 @@ describe('SearchBar', () => {
     test('enables search button when input has text', () => {
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'test query' } });
       
-      const searchButton = screen.getByRole('button', { name: /Search/i });
+      const searchButton = screen.getByRole('button', { name: /search/i });
       expect(searchButton).not.toBeDisabled();
     });
 
     test('shows clear button when input has text', () => {
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'test' } });
       
-      const clearButton = screen.getByRole('button', { name: /X/i });
+      const clearButton = screen.getByRole('button', { name: /clear/i });
       expect(clearButton).toBeInTheDocument();
     });
 
     test('clears input when clear button is clicked', () => {
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i) as HTMLInputElement;
+      const input = screen.getByPlaceholderText('searchPlaceholder') as HTMLInputElement;
       fireEvent.change(input, { target: { value: 'test query' } });
       expect(input.value).toBe('test query');
       
-      const clearButton = screen.getByRole('button', { name: /X/i });
+      const clearButton = screen.getByRole('button', { name: /clear/i });
       fireEvent.click(clearButton);
       
       expect(input.value).toBe('');
@@ -103,10 +103,10 @@ describe('SearchBar', () => {
 
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'meeting' } });
       
-      const searchButton = screen.getByRole('button', { name: /Search/i });
+      const searchButton = screen.getByRole('button', { name: /search/i });
       fireEvent.click(searchButton);
       
       await waitFor(() => {
@@ -131,7 +131,7 @@ describe('SearchBar', () => {
 
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'test' } });
       
       const form = input.closest('form')!;
@@ -150,7 +150,7 @@ describe('SearchBar', () => {
 
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'test' } });
       fireEvent.submit(input.closest('form')!);
       
@@ -167,7 +167,7 @@ describe('SearchBar', () => {
     test('does not search with empty query', () => {
       render(<SearchBar userId={mockUserId} />);
       
-      const searchButton = screen.getByRole('button', { name: /Search/i });
+      const searchButton = screen.getByRole('button', { name: /search/i });
       fireEvent.click(searchButton);
       
       expect(global.fetch).not.toHaveBeenCalled();
@@ -202,7 +202,7 @@ describe('SearchBar', () => {
 
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'test query' } });
       fireEvent.submit(input.closest('form')!);
       
@@ -231,7 +231,7 @@ describe('SearchBar', () => {
 
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'test' } });
       fireEvent.submit(input.closest('form')!);
       
@@ -267,7 +267,7 @@ describe('SearchBar', () => {
 
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'test' } });
       fireEvent.submit(input.closest('form')!);
       
@@ -295,7 +295,7 @@ describe('SearchBar', () => {
 
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'test' } });
       fireEvent.submit(input.closest('form')!);
       
@@ -314,7 +314,7 @@ describe('SearchBar', () => {
 
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'nonexistent query' } });
       fireEvent.submit(input.closest('form')!);
       
@@ -333,12 +333,12 @@ describe('SearchBar', () => {
 
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'test' } });
       fireEvent.submit(input.closest('form')!);
       
       await waitFor(() => {
-        expect(screen.getByText('Searching...')).toBeInTheDocument();
+        expect(screen.getByText(/searching/i)).toBeInTheDocument();
       });
 
       const skeletons = document.querySelectorAll('[class*="skeleton"]');
@@ -352,14 +352,14 @@ describe('SearchBar', () => {
 
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'test' } });
       
-      const searchButton = screen.getByRole('button', { name: /Search/i });
+      const searchButton = screen.getByRole('button', { name: /search/i });
       fireEvent.click(searchButton);
       
       await waitFor(() => {
-        const button = screen.getByRole('button', { name: /Searching/i });
+        const button = screen.getByRole('button', { name: /searching/i });
         expect(button).toBeDisabled();
       });
     });
@@ -374,7 +374,7 @@ describe('SearchBar', () => {
 
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'test' } });
       fireEvent.submit(input.closest('form')!);
       
@@ -388,7 +388,7 @@ describe('SearchBar', () => {
 
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'test' } });
       fireEvent.submit(input.closest('form')!);
       
@@ -417,7 +417,7 @@ describe('SearchBar', () => {
 
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'test1' } });
       fireEvent.submit(input.closest('form')!);
       
@@ -460,7 +460,7 @@ describe('SearchBar', () => {
 
       render(<SearchBar userId={mockUserId} />);
       
-      const input = screen.getByPlaceholderText(/Search your notes/i);
+      const input = screen.getByPlaceholderText('searchPlaceholder');
       fireEvent.change(input, { target: { value: 'test' } });
       fireEvent.submit(input.closest('form')!);
       
@@ -468,7 +468,7 @@ describe('SearchBar', () => {
         expect(screen.getByText('Test result')).toBeInTheDocument();
       });
 
-      const clearButton = screen.getByRole('button', { name: /X/i });
+      const clearButton = screen.getByRole('button', { name: /clear/i });
       fireEvent.click(clearButton);
       
       expect(screen.queryByText('Test result')).not.toBeInTheDocument();

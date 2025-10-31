@@ -139,6 +139,22 @@ global.webkitSpeechRecognition = jest.fn()
 // Mock fetch
 global.fetch = jest.fn()
 
+// Mock react-i18next for tests
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key) => key, // Return the key itself as the translation
+    i18n: {
+      changeLanguage: jest.fn(),
+      language: 'en',
+    },
+  }),
+  Trans: ({ children }) => children,
+  initReactI18next: {
+    type: '3rdParty',
+    init: jest.fn(),
+  },
+}));
+
 // Suppress console errors during tests (optional)
 global.console = {
   ...console,

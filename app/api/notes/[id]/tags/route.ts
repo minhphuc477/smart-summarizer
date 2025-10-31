@@ -7,7 +7,7 @@ type Params = { params: Promise<{ id: string }> };
 export async function POST(request: NextRequest, props: Params) {
   const { id } = await props.params;
   try {
-    const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest, props: Params) {
 export async function DELETE(request: NextRequest, props: Params) {
   const { id } = await props.params;
   try {
-    const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

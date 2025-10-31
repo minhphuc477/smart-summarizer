@@ -4,7 +4,7 @@ import { getServerSupabase } from '@/lib/supabaseServer';
 // GET: Fetch all tags for autocomplete (user's tags or all public tags)
 export async function GET(request: NextRequest) {
   try {
-    const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q') || '';
 

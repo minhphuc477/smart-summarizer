@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { getServerSupabase } from "@/lib/supabaseServer";
 
 type Params = {
   params: Promise<{
@@ -11,10 +11,10 @@ type Params = {
 export async function GET(request: NextRequest, props: Params) {
   const params = await props.params;
   try {
-
+    const supabase = await getServerSupabase();
     // Check authentication
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, props: Params) {
       .from('folder_stats')
       .select('*')
       .eq('id', params.id)
-      .eq('user_id', session.user.id)
+  .eq('user_id', user.id)
       .single();
 
     if (error || !folder) {
@@ -50,9 +50,10 @@ export async function GET(request: NextRequest, props: Params) {
 export async function PATCH(request: NextRequest, props: Params) {
   const params = await props.params;
   try {
+    const supabase = await getServerSupabase();
     // Check authentication
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -89,7 +90,7 @@ export async function PATCH(request: NextRequest, props: Params) {
       .from('folders')
       .update(updates)
       .eq('id', params.id)
-      .eq('user_id', session.user.id)
+  .eq('user_id', user.id)
       .select()
       .single();
 
@@ -116,9 +117,10 @@ export async function PATCH(request: NextRequest, props: Params) {
 export async function DELETE(request: NextRequest, props: Params) {
   const params = await props.params;
   try {
+    const supabase = await getServerSupabase();
     // Check authentication
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -130,7 +132,7 @@ export async function DELETE(request: NextRequest, props: Params) {
       .from('folders')
       .delete()
       .eq('id', params.id)
-      .eq('user_id', session.user.id);
+  .eq('user_id', user.id);
 
     if (error) {
       console.error('Error deleting folder:', error);

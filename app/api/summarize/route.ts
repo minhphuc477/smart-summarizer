@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     // Logged in mode: Lưu vào database
     if (userId && jsonResponse.tags && Array.isArray(jsonResponse.tags)) {
       const dbStartTime = Date.now();
-      const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
       
       try {
         // Bước 1: Lưu note vào bảng notes

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getServerSupabase } from '@/lib/supabaseServer';
 
 type Params = {
   params: Promise<{
@@ -12,8 +12,9 @@ export async function GET(request: NextRequest, props: Params) {
   const params = await props.params;
   const { id } = params;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const supabase = await getServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -45,8 +46,9 @@ export async function PATCH(request: NextRequest, props: Params) {
   const params = await props.params;
   const { id } = params;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const supabase = await getServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const body = await request.json();
@@ -97,8 +99,9 @@ export async function DELETE(request: NextRequest, props: Params) {
   const params = await props.params;
   const { id } = params;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const supabase = await getServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

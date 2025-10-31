@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getServerSupabase } from '@/lib/supabaseServer';
 
 export async function GET(_req: Request) {
   try {
+    const supabase = await getServerSupabase();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
@@ -15,7 +16,7 @@ export async function GET(_req: Request) {
       .eq('user_id', user.id)
       .single();
 
-    if (error && error.code !== 'PGRST116') { // Not found is OK
+    if (error && (error as { code?: string }).code !== 'PGRST116') { // Not found is OK
       throw error;
     }
 
@@ -28,6 +29,7 @@ export async function GET(_req: Request) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const supabase = await getServerSupabase();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {

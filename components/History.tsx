@@ -280,9 +280,14 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
 
           if (error) {
             console.error("Error fetching notes:", error);
+            // Hide Load More on error
+            setHasMore(false);
           } else {
-            setNotes((data || []) as unknown as Note[]);
-            setHasMore((count || 0) > PAGE_SIZE);
+            const list = (data || []) as unknown as Note[];
+            setNotes(list);
+            // Only show Load More when we actually have more to fetch
+            const total = count || list.length || 0;
+            setHasMore(total > PAGE_SIZE);
             setPage(1);
           }
         } catch (e) {
@@ -375,6 +380,8 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
       if (error) {
         console.error("Error loading more notes:", error);
         toast.error('Failed to load more notes');
+        // Stop showing the button after an error to avoid repeated failures
+        setHasMore(false);
       } else {
   setNotes(prev => [...prev, ...(data || []) as unknown as Note[]]);
   setPage(nextPage);
@@ -699,45 +706,85 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
 
   // Add tag to note
   const handleAddTag = async (noteId: number) => {
-    if (!newTagInput.trim()) return;
+    const tagName = newTagInput.trim();
+    if (!tagName) return;
+
+    // Optimistic update: add a temporary tag locally immediately
+    const tempId = -Date.now();
+    const originalNotes = notes;
+    setNotes(prev => prev.map(n => {
+      if (n.id === noteId) {
+        const existing = n.note_tags || [];
+        return {
+          ...n,
+          note_tags: [...existing, { tags: { id: tempId as unknown as number, name: tagName } }]
+        };
+      }
+      return n;
+    }));
+
+    // Clear UI inputs immediately for snappy UX
+    setNewTagInput('');
+    setTagSuggestions([]);
+    toast.success('Tag added');
+
     try {
       const res = await fetch(`/api/notes/${noteId}/tags`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tagName: newTagInput.trim() }),
+        body: JSON.stringify({ tagName }),
       });
-      
+
       if (!res.ok) {
+        // Revert optimistic update
+        setNotes(originalNotes);
         toast.error('Failed to add tag');
         return;
       }
-      
+
+      // Refresh from server to get canonical IDs and relations
       await refreshOneNote(noteId);
-      setNewTagInput('');
-      setTagSuggestions([]);
-      toast.success('Tag added');
+      toast.success('Tag synced');
     } catch (e) {
       console.error('Add tag error:', e);
+      setNotes(originalNotes);
       toast.error('Failed to add tag');
     }
   };
 
   // Remove tag from note
   const handleRemoveTag = async (noteId: number, tagId: number) => {
+    // Optimistic removal
+    const originalNotes = notes;
+    setNotes(prev => prev.map(n => {
+      if (n.id === noteId) {
+        return {
+          ...n,
+          note_tags: (n.note_tags || []).filter(nt => nt.tags?.id !== tagId)
+        };
+      }
+      return n;
+    }));
+
+    toast.success('Tag removed');
+
     try {
       const res = await fetch(`/api/notes/${noteId}/tags?tagId=${tagId}`, {
         method: 'DELETE',
       });
       
       if (!res.ok) {
+        setNotes(originalNotes);
         toast.error('Failed to remove tag');
         return;
       }
-      
+
+      // Refresh to ensure canonical state
       await refreshOneNote(noteId);
-      toast.success('Tag removed');
+      toast.success('Tag removal synced');
     } catch (e) {
       console.error('Remove tag error:', e);
+      setNotes(originalNotes);
       toast.error('Failed to remove tag');
     }
   };
@@ -797,62 +844,122 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
     
     if (!window.confirm(`Delete ${selectedNoteIds.size} note(s)?`)) return;
 
-    try {
-      const { error } = await supabase
-        .from('notes')
-        .delete()
-        .in('id', Array.from(selectedNoteIds));
+    // Optimistic: remove notes locally first for instant feedback
+    const ids = Array.from(selectedNoteIds);
+    const originalNotes = notes;
+    let undoTimeout: NodeJS.Timeout | null = null;
+    let hasCommitted = false;
 
-      if (error) throw error;
+    setNotes(prev => prev.filter(n => !selectedNoteIds.has(n.id)));
+    setSelectedNoteIds(new Set());
+    setBulkActionMode(false);
 
-      setNotes(notes.filter(n => !selectedNoteIds.has(n.id)));
-      setSelectedNoteIds(new Set());
-      setBulkActionMode(false);
-      toast.success(`${selectedNoteIds.size} note(s) deleted`);
-    } catch (e) {
-      console.error('Bulk delete error:', e);
-      toast.error('Failed to delete notes');
-    }
+    // Show toast with undo action
+    toast.success(`${ids.length} note(s) deleted`, {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          if (!hasCommitted) {
+            // Cancel the delete and restore
+            if (undoTimeout) clearTimeout(undoTimeout);
+            setNotes(originalNotes);
+            toast.info('Delete cancelled');
+          } else {
+            toast.error('Cannot undo - delete already committed');
+          }
+        },
+      },
+      duration: 5000,
+    });
+
+    // Delay actual delete to allow undo
+    undoTimeout = setTimeout(async () => {
+      hasCommitted = true;
+      try {
+        const { error } = await supabase
+          .from('notes')
+          .delete()
+          .in('id', ids);
+
+        if (error) {
+          // Revert on error
+          setNotes(originalNotes);
+          toast.error('Failed to delete notes');
+        }
+      } catch (e) {
+        console.error('Bulk delete error:', e);
+        setNotes(originalNotes);
+        toast.error('Failed to delete notes');
+      }
+    }, 5000);
   };
 
   const handleBulkMove = async (targetFolderId: string) => {
     if (selectedNoteIds.size === 0) return;
 
-    try {
-      const folderId = targetFolderId === 'none' ? null : parseInt(targetFolderId);
-      
-      const { error } = await supabase
-        .from('notes')
-        .update({ folder_id: folderId })
-        .in('id', Array.from(selectedNoteIds));
+    // Optimistic move: update UI immediately
+    const ids = Array.from(selectedNoteIds);
+    const folderId = targetFolderId === 'none' ? null : parseInt(targetFolderId);
+    const originalNotes = notes;
+    const targetFolder = folders.find(f => f.id === folderId) || undefined;
+    let undoTimeout: NodeJS.Timeout | null = null;
+    let hasCommitted = false;
 
-  if (error) throw error;
+    setNotes(prev => prev.map(n => {
+      if (ids.includes(n.id)) {
+        return {
+          ...n,
+          folder_id: folderId ?? undefined,
+          folders: folderId ? targetFolder : undefined,
+        };
+      }
+      return n;
+    }));
 
-      // Update the notes in state with new folder info
-      const { data: foldersData } = await supabase
-        .from('folders')
-        .select('id, name, color');
-      
-      const folderMap = new Map((foldersData || []).map(f => [f.id, f]));
-      
-      setNotes(notes.map(n => {
-        if (selectedNoteIds.has(n.id)) {
-          return {
-            ...n,
-            folder_id: folderId ?? undefined,
-            folders: folderId ? folderMap.get(folderId) : undefined
-          };
+    setSelectedNoteIds(new Set());
+    setBulkActionMode(false);
+
+    const folderName = targetFolder?.name || 'No folder';
+    toast.success(`${ids.length} note(s) moved to ${folderName}`, {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          if (!hasCommitted) {
+            // Cancel the move and restore
+            if (undoTimeout) clearTimeout(undoTimeout);
+            setNotes(originalNotes);
+            toast.info('Move cancelled');
+          } else {
+            toast.error('Cannot undo - move already committed');
+          }
+        },
+      },
+      duration: 5000,
+    });
+
+    // Delay actual move to allow undo
+    undoTimeout = setTimeout(async () => {
+      hasCommitted = true;
+      try {
+        const { error } = await supabase
+          .from('notes')
+          .update({ folder_id: folderId })
+          .in('id', ids);
+
+        if (error) {
+          setNotes(originalNotes);
+          toast.error('Failed to move notes');
+          return;
         }
-        return n;
-      }));
-      
-      setSelectedNoteIds(new Set());
-      setBulkActionMode(false);
-      toast.success(`${selectedNoteIds.size} note(s) moved`);
-    } catch (e) {
-      console.error('Bulk move error:', e);
-      toast.error('Failed to move notes');
-    }
+
+        // Optionally refresh affected notes
+        await Promise.all(ids.map(id => refreshOneNote(id)));
+      } catch (e) {
+        console.error('Bulk move error:', e);
+        setNotes(originalNotes);
+        toast.error('Failed to move notes');
+      }
+    }, 5000);
   };
 
   const handleBulkExport = () => {

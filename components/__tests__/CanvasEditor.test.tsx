@@ -10,6 +10,8 @@ jest.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuItem: ({ children, onClick }: any) => (
     <div onClick={onClick}>{children}</div>
   ),
+  DropdownMenuLabel: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuSeparator: () => <div />,
 }));
 
 // Mock reactflow heavy components/hooks

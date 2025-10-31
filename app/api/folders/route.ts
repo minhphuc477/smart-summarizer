@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { getServerSupabase } from "@/lib/supabaseServer";
 
 // GET: List all folders for current user
 // POST: Create new folder
 export async function GET(_request: Request) {
   try {
-
+    const supabase = await getServerSupabase();
     // Check authentication
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -19,7 +19,7 @@ export async function GET(_request: Request) {
     const { data: folders, error } = await supabase
       .from('folder_stats')
       .select('*')
-      .eq('user_id', session.user.id)
+  .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -43,9 +43,10 @@ export async function GET(_request: Request) {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await getServerSupabase();
     // Check authentication
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
     const { data: folder, error } = await supabase
       .from('folders')
       .insert({
-        user_id: session.user.id,
+        user_id: user.id,
         name: name.trim(),
         description: description?.trim() || null,
         color: color || '#3B82F6',

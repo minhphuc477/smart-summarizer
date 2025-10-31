@@ -23,6 +23,7 @@
     "@supabase/auth-helpers-react": "^0.5.0",
     "@supabase/auth-ui-react": "^0.4.7",
     "@supabase/auth-ui-shared": "^0.1.8",
+    "@supabase/ssr": "^0.5.0",
     "@supabase/supabase-js": "^2.74.0",
     "@types/crypto-js": "^4.2.2",
     "@types/react-speech-recognition": "^3.9.6",

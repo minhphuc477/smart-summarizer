@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getServerSupabase } from '@/lib/supabaseServer';
 
 type Params = {
   params: Promise<{
@@ -12,7 +12,8 @@ export async function GET(request: NextRequest, props: Params) {
   const params = await props.params;
   const { id } = params;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const supabase = await getServerSupabase();
+    const { data: { user } } = await supabase.auth.getUser();
 
     // Get canvas
     const { data: canvas, error: canvasError } = await supabase
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest, props: Params) {
     }
 
     // Check if public or user has access
-    if (!canvas.is_public && (!session || canvas.user_id !== session.user.id)) {
+    if (!canvas.is_public && (!user || canvas.user_id !== user.id)) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
@@ -58,8 +59,9 @@ export async function PATCH(request: NextRequest, props: Params) {
   const params = await props.params;
   const { id } = params;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const supabase = await getServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const body = await request.json();
@@ -90,7 +92,7 @@ export async function PATCH(request: NextRequest, props: Params) {
       if (nodes.length > 0) {
         await supabase
           .from('canvas_nodes')
-          .insert(nodes.map(node => ({
+          .insert(nodes.map((node: Record<string, unknown>) => ({
             canvas_id: id,
             ...node,
           })));
@@ -109,7 +111,7 @@ export async function PATCH(request: NextRequest, props: Params) {
       if (edges.length > 0) {
         await supabase
           .from('canvas_edges')
-          .insert(edges.map(edge => ({
+          .insert(edges.map((edge: Record<string, unknown>) => ({
             canvas_id: id,
             ...edge,
           })));
@@ -128,8 +130,9 @@ export async function DELETE(request: NextRequest, props: Params) {
   const params = await props.params;
   const { id } = params;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const supabase = await getServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -140,7 +143,7 @@ export async function DELETE(request: NextRequest, props: Params) {
 
     if (error) {
       console.error('Error deleting canvas:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: String((error as { message?: string }).message || 'Error') }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });

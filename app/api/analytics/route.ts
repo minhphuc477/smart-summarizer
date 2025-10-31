@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getServerSupabase } from '@/lib/supabaseServer';
 
 export const dynamic = 'force-dynamic';
 
 // GET: Lấy analytics data
 export async function GET(request: NextRequest) {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const supabase = await getServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
     const { data: analytics, error } = await supabase
       .from('user_analytics')
       .select('*')
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .gte('date', new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
       .order('date', { ascending: true });
 
@@ -32,14 +33,14 @@ export async function GET(request: NextRequest) {
     const { data: summary } = await supabase
       .from('user_analytics_summary')
       .select('*')
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .single();
 
     // Get recent events
     const { data: recentEvents } = await supabase
       .from('usage_events')
       .select('*')
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50);
 
@@ -68,10 +69,11 @@ export async function GET(request: NextRequest) {
       .map(([name, count]) => ({ name, count }));
 
     // Get sentiment distribution
+    type SentNote = { sentiment: 'positive' | 'neutral' | 'negative' | null; created_at: string };
     const { data: notes } = await supabase
       .from('notes')
       .select('sentiment, created_at')
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .gte('created_at', new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString())
       .order('created_at', { ascending: true });
 
@@ -85,8 +87,8 @@ export async function GET(request: NextRequest) {
     // Calculate sentiment over time (group by date)
     const sentimentByDate: Record<string, { positive: number; neutral: number; negative: number }> = {};
 
-    (notes || []).forEach((note) => {
-      const sentiment = note.sentiment || 'neutral';
+    (notes as SentNote[] | null || []).forEach((note) => {
+      const sentiment = (note.sentiment ?? 'neutral') as 'positive' | 'neutral' | 'negative';
       if (sentiment === 'positive') sentimentDistribution.positive++;
       else if (sentiment === 'negative') sentimentDistribution.negative++;
       else sentimentDistribution.neutral++;
@@ -125,8 +127,9 @@ export async function GET(request: NextRequest) {
 // POST: Track event
 export async function POST(request: Request) {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const supabase = await getServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -139,14 +142,14 @@ export async function POST(request: Request) {
 
     // Insert event
     await supabase.from('usage_events').insert({
-      user_id: session.user.id,
+      user_id: user.id,
       event_type,
       event_data: event_data || {},
     });
 
     // Update analytics
     await supabase.rpc('increment_user_analytics', {
-      p_user_id: session.user.id,
+      p_user_id: user.id,
       p_event_type: event_type,
       p_increment_value: 1,
     });

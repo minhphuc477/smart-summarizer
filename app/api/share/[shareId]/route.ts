@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getServerSupabase } from '@/lib/supabaseServer';
 
 type Params = {
   params: Promise<{
@@ -12,6 +12,7 @@ export async function GET(request: NextRequest, props: Params) {
   const params = await props.params;
   const { shareId } = params;
   try {
+    const supabase = await getServerSupabase();
 
     // Fetch public note
     const { data: note, error } = await supabase

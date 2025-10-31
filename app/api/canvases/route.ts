@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getServerSupabase } from '@/lib/supabaseServer';
 
 export const dynamic = 'force-dynamic';
 
 // GET: Lấy danh sách canvases
 export async function GET() {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const supabase = await getServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -18,7 +19,7 @@ export async function GET() {
 
     if (error) {
       console.error('Error fetching canvases:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: String((error as { message?: string }).message || 'Error') }, { status: 500 });
     }
 
     return NextResponse.json({ canvases });
@@ -31,8 +32,9 @@ export async function GET() {
 // POST: Tạo canvas mới
 export async function POST(request: Request) {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const supabase = await getServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -42,7 +44,7 @@ export async function POST(request: Request) {
     const { data: canvas, error } = await supabase
       .from('canvases')
       .insert({
-        user_id: session.user.id,
+        user_id: user.id,
         title: title || 'Untitled Canvas',
         description,
         workspace_id: workspace_id || null,
@@ -52,12 +54,12 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error('Error creating canvas:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: String((error as { message?: string }).message || 'Error') }, { status: 500 });
     }
 
     // Track analytics
     await supabase.rpc('increment_user_analytics', {
-      p_user_id: session.user.id,
+      p_user_id: user.id,
       p_event_type: 'canvas_created',
       p_increment_value: 1,
     });

@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 // GET: List notes for current user with optional filters: folderId, q (search), limit/offset
 export async function GET(request: NextRequest) {
   try {
-    const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
 // POST: Create a new note for current user
 export async function POST(request: Request) {
   try {
-    const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

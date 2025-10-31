@@ -18,7 +18,7 @@ export async function GET(req: Request) {
 
   try {
     // Check database connection
-    const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
     const { error: dbError } = await supabase
       .from('notes')
       .select('id', { head: true, count: 'exact' });

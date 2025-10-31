@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getServerSupabase } from '@/lib/supabaseServer';
 
 export const dynamic = 'force-dynamic';
 
 // GET: Lấy danh sách templates
 export async function GET() {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const supabase = await getServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     // Helper: default seed set used when DB is empty or public access is restricted
     const defaults = [
@@ -93,8 +94,8 @@ export async function GET() {
       },
     ];
 
-    // If there is no session, attempt to fetch only public system templates; if that fails, fall back to defaults.
-    if (!session) {
+    // If there is no user, attempt to fetch only public system templates; if that fails, fall back to defaults.
+    if (authError || !user) {
       const { data: publicTemplates, error: publicError } = await supabase
         .from('templates')
         .select('*')
@@ -102,7 +103,7 @@ export async function GET() {
         .order('usage_count', { ascending: false });
 
       if (publicError) {
-        console.warn('Public system templates fetch failed, returning in-memory defaults:', publicError.message);
+        console.warn('Public system templates fetch failed, returning in-memory defaults:', String((publicError as { message?: string }).message || 'Error'));
         const synthetic = defaults.map((d, i) => ({
           id: `sys-${i + 1}`,
           created_at: new Date().toISOString(),
@@ -133,14 +134,14 @@ export async function GET() {
     const { data: templatesData, error } = await supabase
       .from('templates')
       .select('*')
-      .or(`is_system.eq.true,user_id.eq.${session.user.id}`)
+      .or(`is_system.eq.true,user_id.eq.${user.id}`)
       .order('is_system', { ascending: false })
       .order('usage_count', { ascending: false });
     let templates = templatesData;
 
     if (error) {
       console.error('Error fetching templates:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: String((error as { message?: string }).message || 'Error') }, { status: 500 });
     }
 
     // If no templates found, seed with sensible defaults (one-time bootstrap)
@@ -158,7 +159,7 @@ export async function GET() {
           .select('*');
 
         if (seedError) {
-          console.warn('Seeding templates failed, falling back to in-memory defaults:', seedError.message);
+          console.warn('Seeding templates failed, falling back to in-memory defaults:', String((seedError as { message?: string }).message || 'Error'));
           // Fallback: return in-memory defaults with synthetic IDs
           const synthetic = defaults.map((d, i) => ({
             id: `sys-${i + 1}`,
@@ -193,8 +194,9 @@ export async function GET() {
 // POST: Tạo custom template
 export async function POST(request: Request) {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const supabase = await getServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -220,14 +222,14 @@ export async function POST(request: Request) {
         persona_prompt,
         structure,
         is_system: false,
-        user_id: session.user.id,
+        user_id: user.id,
       })
       .select()
       .single();
 
     if (error) {
       console.error('Error creating template:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: String((error as { message?: string }).message || 'Error') }, { status: 500 });
     }
 
     return NextResponse.json({ template }, { status: 201 });

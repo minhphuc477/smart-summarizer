@@ -4,7 +4,7 @@ import { getServerSupabase } from '@/lib/supabaseServer';
 // GET /api/personas - Fetch all personas for the authenticated user
 export async function GET(_request: Request) {
   try {
-    const supabase = getServerSupabase();
+    const supabase = await getServerSupabase();
 
     // Get authenticated user
     const {
@@ -39,7 +39,7 @@ export async function GET(_request: Request) {
 // POST /api/personas - Create a new persona
 export async function POST(request: NextRequest) {
   try {
-    const supabase = getServerSupabase();
+    const supabase = await getServerSupabase();
 
     // Get authenticated user
     const {

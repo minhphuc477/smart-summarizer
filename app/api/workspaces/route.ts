@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getServerSupabase } from '@/lib/supabaseServer';
 
 export const dynamic = 'force-dynamic';
 
 // GET: Lấy danh sách workspaces của user
 export async function GET() {
   try {
+    const supabase = await getServerSupabase();
     // Check authentication
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
-    if (authError || !session) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -16,7 +17,7 @@ export async function GET() {
     const { data: workspaces, error } = await supabase
       .from('user_workspaces')
       .select('*')
-      .eq('user_id', session.user.id)
+  .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -37,9 +38,10 @@ export async function GET() {
 // POST: Tạo workspace mới
 export async function POST(request: Request) {
   try {
+    const supabase = await getServerSupabase();
     // Check authentication
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
-    if (authError || !session) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -68,7 +70,7 @@ export async function POST(request: Request) {
       .insert({
         name: name.trim(),
         description: description?.trim() || null,
-        owner_id: session.user.id,
+        owner_id: user.id,
       })
       .select()
       .single();
