@@ -8,18 +8,36 @@ export async function GET(_request: Request) {
     const supabase = await getServerSupabase();
     // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    console.log('🔍 Folders API - Auth Check:', {
+      hasUser: !!user,
+      userId: user?.id,
+      userEmail: user?.email,
+      authError: authError?.message,
+    });
+    
     if (authError || !user) {
+      console.log('❌ Folders API - Unauthorized:', authError?.message || 'No user');
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    // Fetch folders with stats
+    // Fetch folders directly (more reliable than view with RLS)
     const { data: folders, error } = await supabase
-      .from('folder_stats')
-      .select('*')
-  .eq('user_id', user.id)
+      .from('folders')
+      .select(`
+        id,
+        name,
+        description,
+        color,
+        user_id,
+        workspace_id,
+        created_at,
+        updated_at
+      `)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {

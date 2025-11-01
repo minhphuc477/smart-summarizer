@@ -264,15 +264,30 @@ export function PersonaManager({
     return null;
   }
 
+  // derive a short label for the currently selected identity so the trigger shows
+  // only the name (not the full prompt/content). This improves readability in the
+  // selection box while keeping the full prompt available in the dropdown/tooltips.
+  const selectedName = (() => {
+    if (!selectedPersonaId) return undefined;
+    if (selectedPersonaId.startsWith('preset:')) {
+      const p = PRESET_PERSONAS.find((x) => x.id === selectedPersonaId);
+      return p ? p.name : undefined;
+    }
+    const p = personas.find((x) => x.id === selectedPersonaId);
+    return p ? p.name : undefined;
+  })();
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 flex-wrap min-w-0">
         {/* Persona Selector */}
         <Select value={selectedPersonaId} onValueChange={handleSelectPersona}>
           <SelectTrigger className="w-full sm:w-[260px] max-w-full min-w-0 overflow-hidden">
-            <User className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="Select Persona" />
-          </SelectTrigger>
+              <User className="h-4 w-4 mr-2" />
+              {/* Show only the selected persona name in the trigger to avoid
+                  rendering long prompts in the compact select box. */}
+              <SelectValue placeholder="Select Persona">{selectedName}</SelectValue>
+            </SelectTrigger>
           <SelectContent>
             {/* Search Input */}
             <div className="p-2 border-b">

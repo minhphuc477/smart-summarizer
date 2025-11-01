@@ -15,6 +15,8 @@ export async function GET(request: Request) {
     
     // Get cookies from request
     const cookieHeader = request.headers.get('cookie') || '';
+    const cookies = cookieHeader.split(';').map(c => c.trim());
+    const sbCookies = cookies.filter(c => c.startsWith('sb-'));
     const hasSbAccessToken = cookieHeader.includes('sb-') && cookieHeader.includes('access-token');
     const hasSbRefreshToken = cookieHeader.includes('sb-') && cookieHeader.includes('refresh-token');
     
@@ -32,12 +34,15 @@ export async function GET(request: Request) {
       cookies: {
         hasAccessToken: hasSbAccessToken,
         hasRefreshToken: hasSbRefreshToken,
-        cookieCount: cookieHeader.split(';').length,
+        cookieCount: cookies.length,
+        supabaseCookieCount: sbCookies.length,
+        supabaseCookieNames: sbCookies.map(c => c.split('=')[0]),
       },
       errors: {
         authError: authError?.message || null,
         sessionError: sessionError?.message || null,
       },
+      rawCookieHeader: cookieHeader ? `${cookieHeader.substring(0, 100)}...` : 'No cookies',
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

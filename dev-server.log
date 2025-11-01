@@ -1,0 +1,142 @@
+
+> smart-summarizer@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.4
+   - Local:        http://localhost:3000
+   - Network:      http://10.0.1.98:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+> [PWA] PWA support is disabled
+> [PWA] PWA support is disabled
+ ✓ Ready in 3.3s
+ ○ Compiling /api/health ...
+ ✓ Compiled /api/health in 4.6s (392 modules)
+{
+  "timestamp": "2025-11-01T14:00:52.859Z",
+  "level": "ERROR",
+  "message": "GET /api/health - 503",
+  "context": {
+    "method": "GET",
+    "endpoint": "/api/health",
+    "statusCode": 503,
+    "type": "response"
+  },
+  "duration": 622
+}
+ GET /api/health 503 in 5477ms
+ ○ Compiling /api/search/saved ...
+ ✓ Compiled /api/search/saved in 597ms (394 modules)
+{
+  "timestamp": "2025-11-01T14:01:07.802Z",
+  "level": "INFO",
+  "message": "GET /api/search/saved - 200",
+  "context": {
+    "userId": "af5616ae-d19b-47fb-93c2-790f9cc40fd0",
+    "method": "GET",
+    "endpoint": "/api/search/saved",
+    "statusCode": 200,
+    "type": "response"
+  },
+  "duration": 496
+}
+ GET /api/search/saved?userId=af5616ae-d19b-47fb-93c2-790f9cc40fd0 200 in 1217ms
+{
+  "timestamp": "2025-11-01T14:02:56.679Z",
+  "level": "INFO",
+  "message": "GET /api/search/saved - 200",
+  "context": {
+    "userId": "af5616ae-d19b-47fb-93c2-790f9cc40fd0",
+    "method": "GET",
+    "endpoint": "/api/search/saved",
+    "statusCode": 200,
+    "type": "response"
+  },
+  "duration": 124
+}
+ GET /api/search/saved?userId=af5616ae-d19b-47fb-93c2-790f9cc40fd0 200 in 229ms
+ ○ Compiling /api/templates ...
+ ✓ Compiled /api/templates in 896ms (394 modules)
+ GET /api/templates 200 in 1224ms
+ ✓ Compiled /api/folders in 433ms (396 modules)
+ GET /api/folders 401 in 613ms
+ ✓ Compiled /api/personas in 363ms (398 modules)
+ GET /api/personas 401 in 478ms
+ ✓ Compiled /api/workspaces in 348ms (400 modules)
+ GET /api/workspaces 401 in 463ms
+ ○ Compiling / ...
+ ✓ Compiled / in 13.6s (1470 modules)
+ GET / 200 in 16095ms
+ ○ Compiling /favicon.ico ...
+ ✓ Compiled /favicon.ico in 1905ms (859 modules)
+ GET /api/folders 401 in 2276ms
+ GET /favicon.ico 200 in 3266ms
+ GET /api/personas 401 in 2345ms
+ GET /api/workspaces 401 in 2356ms
+ GET /api/folders 401 in 37ms
+{
+  "timestamp": "2025-11-01T14:03:48.523Z",
+  "level": "INFO",
+  "message": "GET /api/search/saved - 200",
+  "context": {
+    "userId": "af5616ae-d19b-47fb-93c2-790f9cc40fd0",
+    "method": "GET",
+    "endpoint": "/api/search/saved",
+    "statusCode": 200,
+    "type": "response"
+  },
+  "duration": 128
+}
+ GET /api/search/saved?userId=af5616ae-d19b-47fb-93c2-790f9cc40fd0 200 in 2461ms
+ GET /api/personas 401 in 104ms
+ GET /api/workspaces 401 in 125ms
+{
+  "timestamp": "2025-11-01T14:03:48.666Z",
+  "level": "INFO",
+  "message": "GET /api/search/saved - 200",
+  "context": {
+    "userId": "af5616ae-d19b-47fb-93c2-790f9cc40fd0",
+    "method": "GET",
+    "endpoint": "/api/search/saved",
+    "statusCode": 200,
+    "type": "response"
+  },
+  "duration": 55
+}
+ GET /api/search/saved?userId=af5616ae-d19b-47fb-93c2-790f9cc40fd0 200 in 98ms
+ GET / 200 in 1023ms
+ GET /api/workspaces 401 in 179ms
+ GET /api/folders 401 in 241ms
+ GET /api/personas 401 in 299ms
+ GET /api/workspaces 401 in 60ms
+ GET /api/folders 401 in 72ms
+ GET /api/personas 401 in 61ms
+{
+  "timestamp": "2025-11-01T14:04:01.732Z",
+  "level": "INFO",
+  "message": "GET /api/search/saved - 200",
+  "context": {
+    "userId": "af5616ae-d19b-47fb-93c2-790f9cc40fd0",
+    "method": "GET",
+    "endpoint": "/api/search/saved",
+    "statusCode": 200,
+    "type": "response"
+  },
+  "duration": 1106
+}
+ GET /api/search/saved?userId=af5616ae-d19b-47fb-93c2-790f9cc40fd0 200 in 1397ms
+{
+  "timestamp": "2025-11-01T14:04:01.838Z",
+  "level": "INFO",
+  "message": "GET /api/search/saved - 200",
+  "context": {
+    "userId": "af5616ae-d19b-47fb-93c2-790f9cc40fd0",
+    "method": "GET",
+    "endpoint": "/api/search/saved",
+    "statusCode": 200,
+    "type": "response"
+  },
+  "duration": 43
+}
+ GET /api/search/saved?userId=af5616ae-d19b-47fb-93c2-790f9cc40fd0 200 in 66ms

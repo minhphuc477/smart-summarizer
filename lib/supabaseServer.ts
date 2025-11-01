@@ -6,6 +6,13 @@ import { createServerClient } from '@supabase/ssr'
 export async function getServerSupabase() {
   try {
     const cookieStore = await cookies();
+    const allCookies = cookieStore.getAll();
+    
+    console.log('🍪 Server cookies:', {
+      count: allCookies.length,
+      supabaseCookies: allCookies.filter(c => c.name.startsWith('sb-')).map(c => c.name),
+      hasAny: allCookies.length > 0,
+    });
     
     return createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
