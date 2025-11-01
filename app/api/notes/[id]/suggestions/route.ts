@@ -4,18 +4,19 @@ import { createRequestLogger } from '@/lib/logger';
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const start = Date.now();
   const logger = createRequestLogger(req);
+  const resolvedParams = await params;
 
   try {
-    const id = Number(params.id);
+    const noteId = resolvedParams.id;
     const url = new URL(req.url);
     const matchCount = Number(url.searchParams.get('matchCount') || 5);
     const matchThreshold = Number(url.searchParams.get('matchThreshold') || 0.78);
 
-    if (!id || Number.isNaN(id)) {
+      if (!noteId || Number.isNaN(Number(noteId))) {
       logger.warn('Invalid note id');
       return NextResponse.json({ error: 'Invalid note id' }, { status: 400 });
     }
@@ -26,7 +27,7 @@ export async function GET(
     const { data: note, error: noteError } = await supabase
       .from('notes')
       .select('id, user_id, embedding')
-      .eq('id', id)
+        .eq('id', noteId)
       .single();
 
     if (noteError || !note) {
@@ -55,12 +56,12 @@ export async function GET(
     // 3) Filter out the current note and shape response
     type MatchRow = { id: number; similarity?: number } & Record<string, unknown>;
     const results = ((matches || []) as MatchRow[])
-      .filter((m) => m.id !== id)
+        .filter((m) => m.id !== Number(noteId))
       .slice(0, matchCount);
 
     const duration = Date.now() - start;
-    logger.info('Related notes fetched', undefined, { id, matchCount: results.length, duration });
-    logger.logResponse('GET', `/api/notes/${id}/suggestions`, 200, duration);
+      logger.info('Related notes fetched', undefined, { noteId, matchCount: results.length, duration });
+      logger.logResponse('GET', `/api/notes/${noteId}/suggestions`, 200, duration);
 
     return NextResponse.json({ results, count: results.length });
   } catch (error: unknown) {

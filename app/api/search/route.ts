@@ -104,7 +104,9 @@ export async function POST(req: Request) {
         .in('note_id', ids);
       if (!tagErr) {
         const byId = new Map<number, string[]>();
-        (noteTags || []).forEach((nt: { note_id: number; tags?: { name?: string } | null }) => {
+        type NoteTagRow = { note_id: number; tags: { name?: string } | null };
+        const typedNoteTags = (noteTags ?? []) as NoteTagRow[];
+        typedNoteTags.forEach((nt) => {
           const arr = byId.get(nt.note_id) || [];
           const nm = nt?.tags?.name ? String(nt.tags.name).toLowerCase() : '';
           if (nm) arr.push(nm);

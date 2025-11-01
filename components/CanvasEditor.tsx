@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useKeyboardShortcuts, commonShortcuts } from '@/lib/useKeyboardShortcuts';
 import { Input } from '@/components/ui/input';
-import { Save, Plus, Download, FileJson, Share2, Image as ImageIcon, Sparkles, Network, Grid3x3, Circle, GitBranch, CheckSquare, Link as LinkIcon, Code2 } from 'lucide-react';
+import { Save, Plus, Download, FileJson, Share2, Image as ImageIcon, Sparkles, Network, Grid3x3, Circle, GitBranch, CheckSquare, Link as LinkIcon, Code2, Palette, Shapes, Route, Layers, PanelsTopLeft } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,7 +46,6 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-  CommandShortcut,
 } from '@/components/ui/command';
 
 // Import custom node components
@@ -72,7 +71,14 @@ type DBNode = {
   width?: number;
   height?: number;
   border_color: string;
+  metadata?: Record<string, unknown> | null;
 };
+
+type NodeMetadata = {
+  parentNode?: string;
+  extent?: 'parent';
+  [key: string]: unknown;
+} | null | undefined;
 
 type DBEdge = {
   edge_id: string;
@@ -100,6 +106,10 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
   const [currentCanvasId, setCurrentCanvasId] = useState(canvasId);
   const [showMinimap, setShowMinimap] = useState(true);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState<'light-clean' | 'dark-slate' | 'mind-map' | 'ocean'>('light-clean');
+  const [nodeShape, setNodeShape] = useState<'rounded' | 'capsule' | 'rectangle'>('rounded');
+  const [_edgeStyle, setEdgeStyle] = useState<'straight' | 'step' | 'smooth'>('straight');
+  const [edgeAnimated, setEdgeAnimated] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const undoStack = useRef<Array<{ nodes: Node[]; edges: Edge[]; title: string }>>([]);
   const redoStack = useRef<Array<{ nodes: Node[]; edges: Edge[]; title: string }>>([]);
@@ -135,9 +145,25 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
       if (response.ok) {
         const data = await response.json();
         setTitle(data.canvas.title);
+        // Rehydrate appearance settings from canvas.description if it contains JSON
+        try {
+          if (data.canvas.description) {
+            const desc = JSON.parse(data.canvas.description);
+            if (desc && typeof desc === 'object') {
+              if (desc.theme) setCurrentTheme(desc.theme);
+              if (desc.nodeShape) setNodeShape(desc.nodeShape);
+              if (desc.edgeStyle) setEdgeStyle(desc.edgeStyle);
+              if (typeof desc.edgeAnimated === 'boolean') setEdgeAnimated(desc.edgeAnimated);
+            }
+          }
+        } catch {
+          // ignore non-JSON descriptions
+        }
         
         // Convert nodes from DB format to ReactFlow format
-        const flowNodes = (data.nodes as DBNode[]).map((node) => ({
+        const flowNodes = (data.nodes as DBNode[]).map((node) => {
+          const meta = node.metadata as NodeMetadata;
+          return ({
           id: node.node_id,
           type: node.type,
           position: { x: node.position_x, y: node.position_y },
@@ -154,7 +180,11 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
             borderRadius: '8px',
             padding: '10px',
           },
-        }));
+          // Reparent/group if metadata contains parent info
+          parentNode: meta?.parentNode,
+          extent: meta?.extent,
+        });
+        });
         
         // Convert edges
         const flowEdges = (data.edges as DBEdge[]).map((edge) => ({
@@ -221,6 +251,86 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
     [setEdges]
   );
+
+  // Theme presets and helpers
+  const themePresets: Record<typeof currentTheme, { node: { bg: string; border: string; text: string }; edge: { color: string }; canvas: { background: { variant: BackgroundVariant; gap: number; size: number } } }> = {
+    'light-clean': {
+      node: { bg: '#ffffff', border: '#e2e8f0', text: '#0f172a' },
+      edge: { color: '#94a3b8' },
+      canvas: { background: { variant: BackgroundVariant.Dots, gap: 12, size: 1 } },
+    },
+    'dark-slate': {
+      node: { bg: '#0b1220', border: '#1f2937', text: '#e5e7eb' },
+      edge: { color: '#374151' },
+      canvas: { background: { variant: BackgroundVariant.Dots, gap: 14, size: 1 } },
+    },
+    'mind-map': {
+      node: { bg: '#fff7ed', border: '#fb923c', text: '#7c2d12' },
+      edge: { color: '#fb923c' },
+      canvas: { background: { variant: BackgroundVariant.Dots, gap: 16, size: 1 } },
+    },
+    'ocean': {
+      node: { bg: '#ecfeff', border: '#06b6d4', text: '#083344' },
+      edge: { color: '#06b6d4' },
+      canvas: { background: { variant: BackgroundVariant.Dots, gap: 14, size: 1 } },
+    },
+  } as const;
+
+  const shapeToRadius: Record<typeof nodeShape, string> = {
+    rounded: '8px',
+    capsule: '9999px',
+    rectangle: '4px',
+  };
+
+  const applyTheme = (key: typeof currentTheme) => {
+    pushUndo();
+    setCurrentTheme(key);
+    const preset = themePresets[key];
+    setNodes(prev => prev.map(n => ({
+      ...n,
+      style: {
+        ...n.style,
+        backgroundColor: n.style?.backgroundColor ?? preset.node.bg,
+        border: `2px solid ${preset.node.border}`,
+        borderRadius: shapeToRadius[nodeShape],
+        padding: n.style?.padding ?? '10px',
+      },
+      data: {
+        ...n.data,
+        color: n.data?.color ?? preset.node.text,
+      }
+    })));
+    setEdges(prev => prev.map(e => ({
+      ...e,
+      style: { ...(e.style || {}), stroke: e.style?.stroke || preset.edge.color },
+    })));
+  };
+
+  const applyNodeShape = (shape: typeof nodeShape) => {
+    pushUndo();
+    setNodeShape(shape);
+    const radius = shapeToRadius[shape];
+    setNodes(prev => prev.map(n => ({
+      ...n,
+      style: { ...n.style, borderRadius: radius },
+    })));
+  };
+
+  const applyEdgeStyle = (style: typeof _edgeStyle) => {
+    pushUndo();
+    setEdgeStyle(style);
+    const type = style === 'smooth' ? 'smoothstep' : style === 'step' ? 'step' : 'default';
+    setEdges(prev => prev.map(e => ({ ...e, type })));
+  };
+
+  const toggleEdgeAnimation = () => {
+    pushUndo();
+    setEdgeAnimated(v => {
+      const next = !v;
+      setEdges(prev => prev.map(e => ({ ...e, animated: next })));
+      return next;
+    });
+  };
 
   const addStickyNote = () => {
     const newNode: Node = {
@@ -366,6 +476,25 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
   const saveCanvas = async () => {
     setSaving(true);
     try {
+      // Persist theme/style settings at canvas-level via description JSON
+      const canvasDescription = JSON.stringify({
+        theme: currentTheme,
+        nodeShape,
+        edgeStyle: _edgeStyle,
+        edgeAnimated,
+      });
+
+      const getBorderColor = (n: Node): string => {
+        const inline = (n.data as { borderColor?: string } | undefined)?.borderColor;
+        if (inline) return inline;
+        const border = n.style?.border as string | undefined;
+        if (border) {
+          const match = border.match(/\b(#(?:[0-9a-fA-F]{3}){1,2}|rgb\([^\)]+\)|rgba\([^\)]+\))\b/);
+          if (match) return match[1];
+        }
+        return '#fbbf24';
+      };
+
       // Convert ReactFlow format back to DB format
       const dbNodes = nodes.map(node => ({
         node_id: node.id,
@@ -377,8 +506,12 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
         height: node.style?.height || 150,
         color: node.data.color || '#000',
         background_color: node.style?.backgroundColor || '#fef3c7',
-        border_color: node.data.borderColor || '#fbbf24',
-        metadata: {},
+        border_color: getBorderColor(node),
+        metadata: {
+          parentNode: (node as { parentNode?: string }).parentNode ?? undefined,
+          extent: (node as { extent?: 'parent' }).extent ?? undefined,
+          borderRadius: node.style?.borderRadius,
+        },
       }));
 
       const dbEdges = edges.map(edge => ({
@@ -397,14 +530,14 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
         await fetch(`/api/canvases/${currentCanvasId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, nodes: dbNodes, edges: dbEdges }),
+          body: JSON.stringify({ title, description: canvasDescription, nodes: dbNodes, edges: dbEdges }),
         });
       } else {
         // Create new canvas
         const response = await fetch('/api/canvases', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, workspace_id: workspaceId }),
+          body: JSON.stringify({ title, description: canvasDescription, workspace_id: workspaceId }),
         });
         const data = await response.json();
         setCurrentCanvasId(data.canvas.id);
@@ -413,7 +546,7 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
         await fetch(`/api/canvases/${data.canvas.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nodes: dbNodes, edges: dbEdges }),
+          body: JSON.stringify({ description: canvasDescription, nodes: dbNodes, edges: dbEdges }),
         });
       }
       
@@ -604,6 +737,78 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
     setNodes(prev => [...prev, ...pasted]);
   };
 
+  // Grouping helpers
+  const groupSelection = () => {
+    const selected = nodes.filter(n => n.selected);
+    if (selected.length < 2) {
+      toast.info('Select two or more nodes to group');
+      return;
+    }
+    pushUndo();
+    const padding = 24;
+    const minX = Math.min(...selected.map(n => n.position.x));
+    const minY = Math.min(...selected.map(n => n.position.y));
+    const maxX = Math.max(...selected.map(n => n.position.x + ((n.style?.width as number) || 200)));
+    const maxY = Math.max(...selected.map(n => n.position.y + ((n.style?.height as number) || 150)));
+    const groupId = `group-${Date.now()}`;
+    const groupNode: Node = {
+      id: groupId,
+      type: 'default',
+      position: { x: minX - padding, y: minY - padding },
+      data: { label: 'Group' },
+      style: {
+        width: (maxX - minX) + padding * 2,
+        height: (maxY - minY) + padding * 2,
+        backgroundColor: 'transparent',
+        border: '2px dashed #94a3b8',
+        borderRadius: '12px',
+        padding: '8px',
+      },
+    };
+    const updated = nodes.map(n => {
+      if (!n.selected) return n;
+      return {
+        ...n,
+        parentNode: groupId,
+        extent: 'parent',
+        position: {
+          x: n.position.x - (groupNode.position.x),
+          y: n.position.y - (groupNode.position.y),
+        },
+      } as Node;
+    });
+    setNodes([ ...updated, groupNode ]);
+  };
+
+  const ungroupSelection = () => {
+    const selected = nodes.filter(n => n.selected);
+    if (selected.length === 0) {
+      toast.info('Select grouped nodes to ungroup');
+      return;
+    }
+    pushUndo();
+    const updated = nodes.map(n => {
+      if (!n.selected || !n.parentNode) return n;
+      const parent = nodes.find(p => p.id === n.parentNode);
+      if (!parent) return { ...n, parentNode: undefined, extent: undefined } as Node;
+      return {
+        ...n,
+        parentNode: undefined,
+        extent: undefined,
+        position: {
+          x: n.position.x + (parent.position.x),
+          y: n.position.y + (parent.position.y),
+        },
+      } as Node;
+    });
+    const childParentIds = new Set(updated.filter(n => n.parentNode).map(n => n.parentNode as string));
+    const result = updated.filter(n => {
+      if (!n.data?.label || n.data.label !== 'Group') return true;
+      return childParentIds.has(n.id);
+    });
+    setNodes(result);
+  };
+
   return (
     <div className="h-screen flex flex-col">
       {/* Toolbar */}
@@ -644,6 +849,48 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
               <DropdownMenuItem onClick={addCodeNode}>
                 <Code2 className="h-4 w-4 mr-2" />
                 Code Snippet
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Palette className="h-4 w-4 mr-2" />
+                Theme
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuLabel>Themes</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => applyTheme('light-clean')}>Light Clean</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyTheme('dark-slate')}>Dark Slate</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyTheme('mind-map')}>Mind Map</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyTheme('ocean')}>Ocean</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Node Shape</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => applyNodeShape('rounded')}>
+                <Shapes className="h-4 w-4 mr-2" /> Rounded
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyNodeShape('capsule')}>
+                <Shapes className="h-4 w-4 mr-2" /> Capsule
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyNodeShape('rectangle')}>
+                <Shapes className="h-4 w-4 mr-2" /> Rectangle
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Edges</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => applyEdgeStyle('straight')}>
+                <Route className="h-4 w-4 mr-2" /> Straight
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyEdgeStyle('step')}>
+                <Route className="h-4 w-4 mr-2" /> Step
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyEdgeStyle('smooth')}>
+                <Route className="h-4 w-4 mr-2" /> Smooth
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={toggleEdgeAnimation}>
+                <Route className="h-4 w-4 mr-2" /> {edgeAnimated ? 'Disable' : 'Enable'} Animation
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -743,11 +990,16 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
                 onEdgesChange={handleEdgesChange}
                 onConnect={onConnect}
                 nodeTypes={nodeTypes}
+                selectionOnDrag
                 fitView
               >
                 <Controls />
                 {showMinimap && <MiniMap />}
-                <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
+                <Background 
+                  variant={themePresets[currentTheme].canvas.background.variant} 
+                  gap={themePresets[currentTheme].canvas.background.gap} 
+                  size={themePresets[currentTheme].canvas.background.size} 
+                />
               </ReactFlow>
             </div>
           </ContextMenuTrigger>
@@ -779,6 +1031,12 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
             <ContextMenuItem onClick={duplicateSelected}>Duplicate Selected</ContextMenuItem>
             <ContextMenuItem onClick={copySelected}>Copy</ContextMenuItem>
             <ContextMenuItem onClick={pasteClipboard}>Paste</ContextMenuItem>
+            <ContextMenuItem onClick={groupSelection}>
+              <Layers className="h-4 w-4 mr-2" /> Group Selection
+            </ContextMenuItem>
+            <ContextMenuItem onClick={ungroupSelection}>
+              <PanelsTopLeft className="h-4 w-4 mr-2" /> Ungroup Selection
+            </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuLabel>Layout</ContextMenuLabel>
             <ContextMenuItem onClick={() => handleAutoLayout('tree')}>Tree</ContextMenuItem>
@@ -839,6 +1097,39 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
             <CommandItem onSelect={() => { setShowMinimap(v => !v); setCommandOpen(false); }}>
               {showMinimap ? 'Hide' : 'Show'} Minimap
             </CommandItem>
+            <CommandItem onSelect={() => { applyTheme('light-clean'); setCommandOpen(false); }}>
+              Theme: Light Clean
+            </CommandItem>
+            <CommandItem onSelect={() => { applyTheme('dark-slate'); setCommandOpen(false); }}>
+              Theme: Dark Slate
+            </CommandItem>
+            <CommandItem onSelect={() => { applyTheme('mind-map'); setCommandOpen(false); }}>
+              Theme: Mind Map
+            </CommandItem>
+            <CommandItem onSelect={() => { applyTheme('ocean'); setCommandOpen(false); }}>
+              Theme: Ocean
+            </CommandItem>
+            <CommandItem onSelect={() => { applyNodeShape('rounded'); setCommandOpen(false); }}>
+              Node Shape: Rounded
+            </CommandItem>
+            <CommandItem onSelect={() => { applyNodeShape('capsule'); setCommandOpen(false); }}>
+              Node Shape: Capsule
+            </CommandItem>
+            <CommandItem onSelect={() => { applyNodeShape('rectangle'); setCommandOpen(false); }}>
+              Node Shape: Rectangle
+            </CommandItem>
+            <CommandItem onSelect={() => { applyEdgeStyle('straight'); setCommandOpen(false); }}>
+              Edge: Straight
+            </CommandItem>
+            <CommandItem onSelect={() => { applyEdgeStyle('step'); setCommandOpen(false); }}>
+              Edge: Step
+            </CommandItem>
+            <CommandItem onSelect={() => { applyEdgeStyle('smooth'); setCommandOpen(false); }}>
+              Edge: Smooth
+            </CommandItem>
+            <CommandItem onSelect={() => { toggleEdgeAnimation(); setCommandOpen(false); }}>
+              Edge Animation: Toggle
+            </CommandItem>
           </CommandGroup>
           <CommandSeparator />
           <CommandGroup heading="Layout">
@@ -862,6 +1153,8 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
             <CommandItem onSelect={() => { pasteClipboard(); setCommandOpen(false); }}>Paste</CommandItem>
             <CommandItem onSelect={() => { duplicateSelected(); setCommandOpen(false); }}>Duplicate</CommandItem>
             <CommandItem onSelect={() => { deleteSelected(); setCommandOpen(false); }}>Delete Selected</CommandItem>
+            <CommandItem onSelect={() => { groupSelection(); setCommandOpen(false); }}>Group Selection</CommandItem>
+            <CommandItem onSelect={() => { ungroupSelection(); setCommandOpen(false); }}>Ungroup Selection</CommandItem>
           </CommandGroup>
           <CommandSeparator />
           <CommandGroup heading="AI">

@@ -1,4 +1,3 @@
-import type { NextConfig } from "next";
 import createNextPwa from 'next-pwa';
 
 const withPWA = createNextPwa({

@@ -49,7 +49,6 @@ export function applyTreeLayout(
   }
 
   const positioned = new Set<string>();
-  const levelWidths = new Map<number, number>();
 
   const positionSubtree = (nodeId: string, level: number, xOffset: number): number => {
     if (positioned.has(nodeId)) return xOffset;
@@ -111,10 +110,10 @@ export function applyForceLayout(
   edges: Edge[],
   options: LayoutOptions = {}
 ): Node[] {
-  const { iterations = 100, nodeSpacing = 200 } = options;
+  const { iterations = 100, nodeSpacing: _nodeSpacing = 200 } = options;
   
   // Initialize random positions if not set
-  nodes.forEach((node, i) => {
+  nodes.forEach((node) => {
     if (!node.position || (node.position.x === 0 && node.position.y === 0)) {
       node.position = {
         x: Math.random() * 800,

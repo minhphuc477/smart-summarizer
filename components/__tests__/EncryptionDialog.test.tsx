@@ -5,12 +5,12 @@ import EncryptionDialog from '../EncryptionDialog';
 
 // Mock lib/encryption
 jest.mock('@/lib/encryption', () => ({
-  encryptText: jest.fn((text, password) => ({
+  encryptText: jest.fn((text, _password) => ({
     encrypted: `encrypted:${text}`,
     iv: 'test-iv',
     salt: 'test-salt'
   })),
-  decryptText: jest.fn((encrypted, password, iv, salt) => {
+  decryptText: jest.fn((encrypted, password, _iv, _salt) => {
     if (encrypted.includes('encrypted:') && password === 'correctPass') {
       return encrypted.replace('encrypted:', '');
     }

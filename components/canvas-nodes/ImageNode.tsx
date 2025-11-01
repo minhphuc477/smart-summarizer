@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import { memo, useState } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';

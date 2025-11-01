@@ -2,7 +2,7 @@
 
 import { memo, useState } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { CheckSquare, Square, Plus, X, Trash2 } from 'lucide-react';
+import { CheckSquare, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';

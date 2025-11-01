@@ -69,7 +69,8 @@ describe('CanvasEditor', () => {
 
     expect(screen.getByText('0 nodes')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /add note/i }));
+    // Open the Add Node menu and click on "Sticky Note" (menu renders immediately via mock)
+    fireEvent.click(screen.getByText('Sticky Note'));
 
     expect(screen.getByText('1 nodes')).toBeInTheDocument();
   });

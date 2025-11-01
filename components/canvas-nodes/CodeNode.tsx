@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { Code, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,22 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import Prism from 'prismjs';
+import 'prismjs/themes/prism.css';
+import 'prismjs/components/prism-clike';
+import 'prismjs/components/prism-javascript';
+import 'prismjs/components/prism-typescript';
+import 'prismjs/components/prism-python';
+import 'prismjs/components/prism-java';
+import 'prismjs/components/prism-go';
+import 'prismjs/components/prism-rust';
+import 'prismjs/components/prism-sql';
+import 'prismjs/components/prism-markup';
+import 'prismjs/components/prism-css';
+import 'prismjs/components/prism-json';
+import 'prismjs/components/prism-markdown';
+import 'prismjs/components/prism-bash';
+import 'prismjs/components/prism-yaml';
 
 export type CodeNodeData = {
   code?: string;
@@ -43,6 +59,16 @@ function CodeNode({ data, selected }: NodeProps<CodeNodeData>) {
   const [title, setTitle] = useState(data.title ?? '');
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(!data.code);
+  const codeRef = useRef<HTMLElement>(null);
+
+  const prismLanguage = useMemo(() => {
+    // Map UI language to Prism identifier
+    const map: Record<string, string> = {
+      html: 'markup',
+      plaintext: 'none',
+    };
+    return map[language] ?? language;
+  }, [language]);
 
   const handleCopy = async () => {
     try {
@@ -68,6 +94,17 @@ function CodeNode({ data, selected }: NodeProps<CodeNodeData>) {
     setTitle(newTitle);
     data.title = newTitle;
   };
+
+  // Highlight whenever code or language changes and not in editing mode
+  useEffect(() => {
+    if (editing) return;
+    if (!codeRef.current) return;
+    try {
+      Prism.highlightElement(codeRef.current);
+    } catch (_e) {
+      // no-op if language not loaded
+    }
+  }, [code, prismLanguage, editing]);
 
   return (
     <div
@@ -144,7 +181,7 @@ function CodeNode({ data, selected }: NodeProps<CodeNodeData>) {
         </div>
       ) : (
         <pre className="p-3 overflow-x-auto max-h-[400px] text-xs font-mono bg-muted/20">
-          <code className={cn("language-" + language)}>
+          <code ref={codeRef} className={cn("language-" + prismLanguage)}>
             {code}
           </code>
         </pre>

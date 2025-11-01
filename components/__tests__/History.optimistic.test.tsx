@@ -1,6 +1,5 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import History from '../History';
 import { toast } from 'sonner';
@@ -45,7 +44,7 @@ jest.mock('@/components/ui/select', () => {
       <div data-slot="select-content" {...props}>{children}</div>
     ),
     SelectItem: ({ children, onClick, ...props }: any) => (
-      <div role="option" onClick={onClick} {...props}>{children}</div>
+      <div role="option" aria-selected="false" onClick={onClick} {...props}>{children}</div>
     ),
     SelectValue: ({ children, ...props }: any) => <span data-slot="select-value" {...props}>{children}</span>,
     SelectGroup: ({ children, ...props }: any) => <div data-slot="select-group" {...props}>{children}</div>,

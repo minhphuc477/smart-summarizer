@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import GuestUpgradeDialog from '../GuestUpgradeDialog';
 
@@ -14,7 +14,7 @@ jest.mock('@/lib/supabase', () => ({
 
 // Mock Supabase Auth UI
 jest.mock('@supabase/auth-ui-react', () => ({
-  Auth: ({ appearance }: any) => (
+  Auth: ({ appearance: _appearance }: any) => (
     <div data-testid="auth-ui">
       <input placeholder="Email" />
       <button>Sign in</button>

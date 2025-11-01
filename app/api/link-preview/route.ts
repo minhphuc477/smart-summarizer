@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
         throw new Error('Invalid protocol');
       }
-    } catch (error) {
+    } catch (_error) {
       logger.logResponse('POST', '/api/link-preview', 400, Date.now() - startTime);
       return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 });
     }
