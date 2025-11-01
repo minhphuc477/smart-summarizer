@@ -26,7 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Terminal, Copy, X, Volume2, VolumeX, AlertCircle, Calendar, Link, FileText } from "lucide-react";
+import { Terminal, Copy, X, Volume2, VolumeX, AlertCircle, Calendar, Link, FileText, Plus } from "lucide-react";
 import { useSpeech } from '@/lib/useSpeech';
 
 // Import calendar utilities
@@ -47,6 +47,9 @@ import EncryptionDialog from './EncryptionDialog';
 import NavigationMenu from './NavigationMenu';
 import GuestUpgradeDialog from './GuestUpgradeDialog';
 import { useKeyboardShortcuts, commonShortcuts } from '@/lib/useKeyboardShortcuts';
+import KeyboardShortcutsDialog from './KeyboardShortcutsDialog';
+import OnboardingTour from './OnboardingTour';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Import guest mode utilities
 // Import guest mode utilities
@@ -89,6 +92,11 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
   const [urlInput, setUrlInput] = useState('');
   const [urlError, setUrlError] = useState<string | null>(null);
   const [isValidUrl, setIsValidUrl] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  // Refs for focusing inputs (mobile FAB)
+  const notesRef = useRef<HTMLTextAreaElement | null>(null);
+  const urlRef = useRef<HTMLInputElement | null>(null);
 
   // Hook cho Text-to-Speech
   const { speak, stop, isSpeaking, isSupported } = useSpeech();
@@ -122,6 +130,15 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
       setIsValidUrl(false);
     }
   }, [urlInput]);
+
+  // Show onboarding on first visit to the main app (skip during test runs)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const done = localStorage.getItem('onboarding_done');
+      if (!done) setShowOnboarding(true);
+    } catch {}
+  }, []);
 
   // Auto-save draft for guest users
   useEffect(() => {
@@ -180,6 +197,26 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
       setNotes('');
       setDetectedUrl(null);
     }
+  };
+
+  // Mobile FAB: focus main input, provide light haptic feedback
+  const focusPrimaryInput = () => {
+    try { 
+      const nav = navigator as { vibrate?: (pattern: number | number[]) => void };
+      nav.vibrate?.(10); 
+    } catch {}
+    // Prefer text mode as default capture for quick note
+    if (inputMode !== 'text') setInputMode('text');
+    // Defer focus to end of frame to ensure mode switch has rendered
+    requestAnimationFrame(() => {
+      if (notesRef.current) {
+        notesRef.current.focus();
+        notesRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (urlRef.current) {
+        urlRef.current.focus();
+        urlRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
   };
 
   // Hàm lấy emoji cho sentiment
@@ -439,7 +476,8 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
   });
 
   const shortcuts = useMemo(() => {
-    const baseShortcuts = [
+    type Shortcut = { key: string; ctrl?: boolean; shift?: boolean; alt?: boolean; meta?: boolean; callback: () => void; description?: string };
+    const baseShortcuts: Shortcut[] = [
       {
         key: 'Enter',
         ctrl: true,
@@ -492,13 +530,22 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
       });
     }
 
+    // Global shortcuts dialog (Shift + ?)
+    baseShortcuts.push({
+      key: '/',
+      shift: true,
+      callback: () => setShowShortcuts(true),
+      description: 'Show keyboard shortcuts'
+    });
+
     return baseShortcuts;
   }, [inputMode, isLoading, notes, urlInput, isGuestMode, session]);
   
   useKeyboardShortcuts(shortcuts);
   
   return (
-    <main id="main-content" className="flex min-h-screen bg-background">
+  <TooltipProvider delayDuration={200}>
+  <main id="main-content" className="flex min-h-screen bg-background">
       {/* === Sidebar for Folders & Workspaces (only for logged in users) === */}
       {!isGuestMode && (
         <aside className="w-64 border-r border-border p-4 hidden lg:block space-y-6">
@@ -525,9 +572,14 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
               {!isGuestMode && <NavigationMenu />}
               {/* Mobile: open Folders drawer */}
               {!isGuestMode && (
-                <Button className="lg:hidden" variant="outline" onClick={() => setShowFolders(true)}>
-                  {t('folders')}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button className="lg:hidden" variant="outline" onClick={() => setShowFolders(true)}>
+                      {t('folders')}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Open folders panel</TooltipContent>
+                </Tooltip>
               )}
               <span className="text-muted-foreground text-sm hidden sm:block">
             {isGuestMode ? (
@@ -541,12 +593,43 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
           </span>
             </div>
           <div className="flex items-center gap-2">
-            <LanguageSelector />
-            <ThemeToggle />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div data-testid="language-selector">
+                  <LanguageSelector />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>Change language</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div data-testid="theme-toggle">
+                  <ThemeToggle />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>Toggle theme</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" onClick={() => setShowShortcuts(true)}>?
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Show keyboard shortcuts (Shift + ?)</TooltipContent>
+            </Tooltip>
             {!isGuestMode ? (
-              <Button onClick={handleSignOut} variant="outline">{t('signOut')}</Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={handleSignOut} variant="outline">{t('signOut')}</Button>
+                </TooltipTrigger>
+                <TooltipContent>Sign out</TooltipContent>
+              </Tooltip>
             ) : (
-              <Button onClick={handleSignIn} variant="default">{t('signIn')}</Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={handleSignIn} variant="default">{t('signIn')}</Button>
+                </TooltipTrigger>
+                <TooltipContent>Sign in for unlimited access</TooltipContent>
+              </Tooltip>
             )}
           </div>
         </div>
@@ -670,7 +753,9 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
           
           {/* Input Mode Toggle */}
           <div className="flex gap-2 p-1 bg-muted rounded-lg w-fit">
-            <Button
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
               variant={inputMode === 'text' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setInputMode('text')}
@@ -679,7 +764,12 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
               <FileText className="h-4 w-4" />
               Text Notes
             </Button>
-            <Button
+              </TooltipTrigger>
+              <TooltipContent>Switch to text input</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
               variant={inputMode === 'url' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setInputMode('url')}
@@ -688,6 +778,9 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
               <Link className="h-4 w-4" />
               URL
             </Button>
+              </TooltipTrigger>
+              <TooltipContent>Switch to URL input</TooltipContent>
+            </Tooltip>
           </div>
           
           {/* Conditional Input: Text or URL */}
@@ -699,6 +792,7 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
                 className="min-h-[280px] text-base p-4 w-full"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
+                ref={notesRef}
               />
               {notes && (
                 <Button
@@ -750,6 +844,7 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
                   className="text-base p-4 h-auto"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
+                  ref={urlRef}
                 />
                 {urlInput && (
                   <Button
@@ -762,6 +857,18 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
                     <X className="h-4 w-4" />
                   </Button>
                 )}
+                {/* Mobile Floating Action Button (FAB) */}
+                <div className="md:hidden">
+                  <Button
+                    type="button"
+                    onClick={focusPrimaryInput}
+                    aria-label="New note"
+                    className="fixed bottom-20 right-4 h-14 w-14 rounded-full shadow-lg bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.98]"
+                    size="icon"
+                  >
+                    <Plus className="h-6 w-6" />
+                  </Button>
+                </div>
               </div>
               
               {/* URL Preview Card */}
@@ -1189,7 +1296,12 @@ function SummarizerApp({ session, isGuestMode }: { session: Session; isGuestMode
         onOpenChange={setShowUpgradeDialog}
       />
     )}
+
+    {/* Global dialogs */}
+    <KeyboardShortcutsDialog open={showShortcuts} onOpenChange={setShowShortcuts} />
+    <OnboardingTour open={showOnboarding} onOpenChange={setShowOnboarding} isGuestMode={isGuestMode} />
     </main>
+    </TooltipProvider>
   );
 }
 

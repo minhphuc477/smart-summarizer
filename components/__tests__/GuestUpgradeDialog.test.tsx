@@ -38,7 +38,7 @@ describe('GuestUpgradeDialog', () => {
       expect(screen.getByText('Upgrade Now')).toBeInTheDocument();
     });
 
-    test('opens dialog when trigger is clicked', () => {
+  test('opens dialog when trigger is clicked', () => {
       render(
         <GuestUpgradeDialog
           trigger={<button>Upgrade Now</button>}
@@ -47,10 +47,10 @@ describe('GuestUpgradeDialog', () => {
 
       fireEvent.click(screen.getByText('Upgrade Now'));
 
-      expect(screen.getByText(/upgrade to premium/i)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /upgrade to premium/i })).toBeInTheDocument();
     });
 
-    test('renders with controlled open state', () => {
+  test('renders with controlled open state', () => {
       render(
         <GuestUpgradeDialog
           open={true}
@@ -58,10 +58,10 @@ describe('GuestUpgradeDialog', () => {
         />
       );
 
-      expect(screen.getByText(/upgrade to premium/i)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /upgrade to premium/i })).toBeInTheDocument();
     });
 
-    test('displays crown icon in header', () => {
+  test('displays crown icon in header', () => {
       render(
         <GuestUpgradeDialog
           open={true}
@@ -69,7 +69,7 @@ describe('GuestUpgradeDialog', () => {
         />
       );
 
-      const header = screen.getByText(/upgrade to premium/i).closest('div');
+      const header = screen.getByRole('heading', { name: /upgrade to premium/i }).closest('div');
       expect(header).toBeInTheDocument();
     });
   });
@@ -151,7 +151,7 @@ describe('GuestUpgradeDialog', () => {
   });
 
   describe('Authentication UI', () => {
-    test('shows sign in button initially', () => {
+  test('shows upgrade CTA button initially', () => {
       render(
         <GuestUpgradeDialog
           open={true}
@@ -159,10 +159,10 @@ describe('GuestUpgradeDialog', () => {
         />
       );
 
-      expect(screen.getByRole('button', { name: /sign in to upgrade/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /upgrade to premium/i })).toBeInTheDocument();
     });
 
-    test('toggles to auth UI when sign in is clicked', () => {
+    test('toggles to auth UI when upgrade is clicked', () => {
       render(
         <GuestUpgradeDialog
           open={true}
@@ -170,13 +170,13 @@ describe('GuestUpgradeDialog', () => {
         />
       );
 
-      const signInButton = screen.getByRole('button', { name: /sign in to upgrade/i });
-      fireEvent.click(signInButton);
+  const upgradeButton = screen.getByRole('button', { name: /upgrade to premium/i });
+  fireEvent.click(upgradeButton);
 
       expect(screen.getByTestId('auth-ui')).toBeInTheDocument();
     });
 
-    test('shows back button when auth UI is displayed', () => {
+  test('shows back button when auth UI is displayed', () => {
       render(
         <GuestUpgradeDialog
           open={true}
@@ -184,10 +184,10 @@ describe('GuestUpgradeDialog', () => {
         />
       );
 
-      const signInButton = screen.getByRole('button', { name: /sign in to upgrade/i });
-      fireEvent.click(signInButton);
+      const upgradeButton = screen.getByRole('button', { name: /upgrade to premium/i });
+      fireEvent.click(upgradeButton);
 
-      expect(screen.getByRole('button', { name: /back/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /back to comparison/i })).toBeInTheDocument();
     });
 
     test('goes back to feature comparison from auth UI', () => {
@@ -199,13 +199,13 @@ describe('GuestUpgradeDialog', () => {
       );
 
       // Go to auth UI
-      const signInButton = screen.getByRole('button', { name: /sign in to upgrade/i });
-      fireEvent.click(signInButton);
+  const upgradeButton = screen.getByRole('button', { name: /upgrade to premium/i });
+  fireEvent.click(upgradeButton);
 
       expect(screen.getByTestId('auth-ui')).toBeInTheDocument();
 
       // Go back
-      const backButton = screen.getByRole('button', { name: /back/i });
+  const backButton = screen.getByRole('button', { name: /back to comparison/i });
       fireEvent.click(backButton);
 
       // Should be back to feature comparison
@@ -238,14 +238,14 @@ describe('GuestUpgradeDialog', () => {
       }
     });
 
-    test('renders without onOpenChange callback', () => {
+  test('renders without onOpenChange callback', () => {
       render(
         <GuestUpgradeDialog
           open={true}
         />
       );
 
-      expect(screen.getByText(/upgrade to premium/i)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /upgrade to premium/i })).toBeInTheDocument();
     });
   });
 
@@ -269,9 +269,9 @@ describe('GuestUpgradeDialog', () => {
         />
       );
 
-      // Check for some key descriptive texts
-      expect(screen.getByText(/unlimited/i)).toBeInTheDocument();
-      expect(screen.getByText(/forever/i)).toBeInTheDocument();
+      // Check for some key descriptive texts (may appear in multiple places)
+      expect(screen.getAllByText(/unlimited/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/forever/i).length).toBeGreaterThan(0);
     });
 
     test('emphasizes premium benefits', () => {
@@ -302,7 +302,7 @@ describe('GuestUpgradeDialog', () => {
       expect(table).toBeInTheDocument();
     });
 
-    test('has proper table headers', () => {
+  test('has proper table headers', () => {
       render(
         <GuestUpgradeDialog
           open={true}
@@ -311,8 +311,8 @@ describe('GuestUpgradeDialog', () => {
       );
 
       expect(screen.getByText('Feature')).toBeInTheDocument();
-      expect(screen.getByText('Guest')).toBeInTheDocument();
-      expect(screen.getByText('Premium')).toBeInTheDocument();
+      expect(screen.getByText('Guest Mode')).toBeInTheDocument();
+      expect(screen.getByText('Premium (Free)')).toBeInTheDocument();
     });
 
     test('displays features in rows', () => {
@@ -330,7 +330,7 @@ describe('GuestUpgradeDialog', () => {
   });
 
   describe('Accessibility', () => {
-    test('has accessible dialog title', () => {
+  test('has accessible dialog title', () => {
       render(
         <GuestUpgradeDialog
           open={true}
@@ -338,7 +338,7 @@ describe('GuestUpgradeDialog', () => {
         />
       );
 
-      const title = screen.getByText(/upgrade to premium/i);
+      const title = screen.getByRole('heading', { name: /upgrade to premium/i });
       expect(title).toBeInTheDocument();
     });
 
@@ -357,7 +357,7 @@ describe('GuestUpgradeDialog', () => {
       expect(headers.length).toBeGreaterThanOrEqual(3);
     });
 
-    test('buttons have accessible labels', () => {
+  test('buttons have accessible labels', () => {
       render(
         <GuestUpgradeDialog
           open={true}
@@ -365,9 +365,12 @@ describe('GuestUpgradeDialog', () => {
         />
       );
 
-      const signInButton = screen.getByRole('button', { name: /sign in to upgrade/i });
-      expect(signInButton).toBeInTheDocument();
-      expect(signInButton).toBeEnabled();
+      const upgradeButton = screen.getByRole('button', { name: /upgrade to premium/i });
+      expect(upgradeButton).toBeInTheDocument();
+      expect(upgradeButton).toBeEnabled();
+
+      const maybeLaterButton = screen.getByRole('button', { name: /maybe later/i });
+      expect(maybeLaterButton).toBeInTheDocument();
     });
   });
 });

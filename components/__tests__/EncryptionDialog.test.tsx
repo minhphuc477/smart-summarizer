@@ -58,9 +58,9 @@ describe('EncryptionDialog', () => {
 
       fireEvent.click(screen.getByText('Open'));
 
-      expect(screen.getByText(/encrypt note/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
+  expect(screen.getByText(/encrypt content/i)).toBeInTheDocument();
+  expect(screen.getByPlaceholderText(/^enter password$/i)).toBeInTheDocument();
+  expect(screen.getByPlaceholderText(/^re-enter password$/i)).toBeInTheDocument();
     });
 
     test('opens decrypt dialog when trigger is clicked', () => {
@@ -75,9 +75,9 @@ describe('EncryptionDialog', () => {
 
       fireEvent.click(screen.getByText('Open'));
 
-      expect(screen.getByText(/decrypt note/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
-      expect(screen.queryByLabelText(/confirm password/i)).not.toBeInTheDocument();
+  expect(screen.getByText(/decrypt content/i)).toBeInTheDocument();
+  expect(screen.getByPlaceholderText(/^enter password$/i)).toBeInTheDocument();
+  expect(screen.queryByPlaceholderText(/re-enter password/i)).not.toBeInTheDocument();
     });
   });
 
@@ -94,7 +94,7 @@ describe('EncryptionDialog', () => {
 
       fireEvent.click(screen.getByText('Open'));
 
-      const passwordInput = screen.getByLabelText(/^password$/i) as HTMLInputElement;
+  const passwordInput = screen.getByPlaceholderText(/^enter password$/i) as HTMLInputElement;
       expect(passwordInput.type).toBe('password');
 
       // Click eye icon to toggle
@@ -123,12 +123,12 @@ describe('EncryptionDialog', () => {
 
       fireEvent.click(screen.getByText('Open'));
 
-      const passwordInput = screen.getByLabelText(/^password$/i);
+  const passwordInput = screen.getByPlaceholderText(/^enter password$/i);
       fireEvent.change(passwordInput, { target: { value: '123' } });
 
       // Should show weak indicator
-      const strengthIndicator = screen.queryByText(/weak/i);
-      expect(strengthIndicator || screen.getByLabelText(/^password$/i)).toBeInTheDocument();
+  const strengthIndicator = screen.queryByText(/weak/i);
+  expect(strengthIndicator || screen.getByPlaceholderText(/^enter password$/i)).toBeInTheDocument();
     });
 
     test('shows medium strength for moderate passwords', () => {
@@ -143,7 +143,7 @@ describe('EncryptionDialog', () => {
 
       fireEvent.click(screen.getByText('Open'));
 
-      const passwordInput = screen.getByLabelText(/^password$/i);
+  const passwordInput = screen.getByPlaceholderText(/^enter password$/i);
       fireEvent.change(passwordInput, { target: { value: 'password123' } });
 
       // Password is updated
@@ -162,7 +162,7 @@ describe('EncryptionDialog', () => {
 
       fireEvent.click(screen.getByText('Open'));
 
-      const passwordInput = screen.getByLabelText(/^password$/i);
+  const passwordInput = screen.getByPlaceholderText(/^enter password$/i);
       fireEvent.change(passwordInput, { target: { value: 'StrongPassword123!' } });
 
       expect(passwordInput).toHaveValue('StrongPassword123!');
@@ -182,8 +182,8 @@ describe('EncryptionDialog', () => {
 
       fireEvent.click(screen.getByText('Open'));
 
-      const passwordInput = screen.getByLabelText(/^password$/i);
-      const confirmInput = screen.getByLabelText(/confirm password/i);
+  const passwordInput = screen.getByPlaceholderText(/^enter password$/i);
+  const confirmInput = screen.getByPlaceholderText(/^re-enter password$/i);
 
       fireEvent.change(passwordInput, { target: { value: 'StrongPassword123' } });
       fireEvent.change(confirmInput, { target: { value: 'StrongPassword123' } });
@@ -212,8 +212,8 @@ describe('EncryptionDialog', () => {
 
       fireEvent.click(screen.getByText('Open'));
 
-      const passwordInput = screen.getByLabelText(/^password$/i);
-      const confirmInput = screen.getByLabelText(/confirm password/i);
+  const passwordInput = screen.getByPlaceholderText(/^enter password$/i);
+  const confirmInput = screen.getByPlaceholderText(/^re-enter password$/i);
 
       fireEvent.change(passwordInput, { target: { value: '123' } });
       fireEvent.change(confirmInput, { target: { value: '123' } });
@@ -240,8 +240,8 @@ describe('EncryptionDialog', () => {
 
       fireEvent.click(screen.getByText('Open'));
 
-      const passwordInput = screen.getByLabelText(/^password$/i);
-      const confirmInput = screen.getByLabelText(/confirm password/i);
+  const passwordInput = screen.getByPlaceholderText(/^enter password$/i);
+  const confirmInput = screen.getByPlaceholderText(/^re-enter password$/i);
 
       fireEvent.change(passwordInput, { target: { value: 'StrongPassword123' } });
       fireEvent.change(confirmInput, { target: { value: 'DifferentPassword' } });
@@ -292,7 +292,7 @@ describe('EncryptionDialog', () => {
 
       fireEvent.click(screen.getByText('Open'));
 
-      const passwordInput = screen.getByLabelText(/^password$/i);
+  const passwordInput = screen.getByPlaceholderText(/^enter password$/i);
       fireEvent.change(passwordInput, { target: { value: 'correctPass' } });
 
       const decryptButton = screen.getByRole('button', { name: /decrypt/i });
@@ -319,7 +319,7 @@ describe('EncryptionDialog', () => {
 
       fireEvent.click(screen.getByText('Open'));
 
-      const passwordInput = screen.getByLabelText(/^password$/i);
+  const passwordInput = screen.getByPlaceholderText(/^enter password$/i);
       fireEvent.change(passwordInput, { target: { value: 'wrongPass' } });
 
       const decryptButton = screen.getByRole('button', { name: /decrypt/i });
@@ -367,14 +367,14 @@ describe('EncryptionDialog', () => {
       );
 
       fireEvent.click(screen.getByText('Open'));
-      expect(screen.getByText(/encrypt note/i)).toBeInTheDocument();
+  expect(screen.getByText(/encrypt content/i)).toBeInTheDocument();
 
       const cancelButton = screen.getByRole('button', { name: /cancel/i });
       fireEvent.click(cancelButton);
 
       // Dialog should close
       waitFor(() => {
-        expect(screen.queryByText(/encrypt note/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/encrypt content/i)).not.toBeInTheDocument();
       });
     });
 
@@ -390,8 +390,8 @@ describe('EncryptionDialog', () => {
 
       fireEvent.click(screen.getByText('Open'));
 
-      const passwordInput = screen.getByLabelText(/^password$/i);
-      const confirmInput = screen.getByLabelText(/confirm password/i);
+  const passwordInput = screen.getByPlaceholderText(/^enter password$/i);
+  const confirmInput = screen.getByPlaceholderText(/^re-enter password$/i);
 
       fireEvent.change(passwordInput, { target: { value: 'StrongPassword123' } });
       fireEvent.change(confirmInput, { target: { value: 'StrongPassword123' } });
@@ -404,7 +404,7 @@ describe('EncryptionDialog', () => {
       });
 
       await waitFor(() => {
-        expect(screen.queryByText(/encrypt note/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/encrypt content/i)).not.toBeInTheDocument();
       });
     });
   });
@@ -426,8 +426,8 @@ describe('EncryptionDialog', () => {
 
       fireEvent.click(screen.getByText('Open'));
 
-      const passwordInput = screen.getByLabelText(/^password$/i);
-      const confirmInput = screen.getByLabelText(/confirm password/i);
+  const passwordInput = screen.getByPlaceholderText(/^enter password$/i);
+  const confirmInput = screen.getByPlaceholderText(/re-enter password/i);
 
       fireEvent.change(passwordInput, { target: { value: 'StrongPassword123' } });
       fireEvent.change(confirmInput, { target: { value: 'StrongPassword123' } });
@@ -454,7 +454,7 @@ describe('EncryptionDialog', () => {
 
       fireEvent.click(screen.getByText('Open'));
 
-      const passwordInput = screen.getByLabelText(/^password$/i);
+  const passwordInput = screen.getByPlaceholderText(/enter password/i);
       fireEvent.change(passwordInput, { target: { value: 'password' } });
 
       const decryptButton = screen.getByRole('button', { name: /decrypt/i });

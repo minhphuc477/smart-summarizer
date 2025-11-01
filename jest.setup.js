@@ -106,6 +106,11 @@ global.IntersectionObserver = class IntersectionObserver {
   unobserve() {}
 }
 
+// Polyfill scrollIntoView for components (e.g., Radix Select) in jsdom
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = jest.fn();
+}
+
 // Mock crypto.randomUUID and getRandomValues for crypto-js
 Object.defineProperty(global, 'crypto', {
   value: {

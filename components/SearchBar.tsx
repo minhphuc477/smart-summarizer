@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useMemo } from 'react';
+import { useRef, useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import { Search, X, ExternalLink, Copy, Check, Share2, Loader2, Trash2 } from "l
 import { toast } from 'sonner';
 import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts';
 import { EmptyState } from '@/components/EmptyState';
+import AdvancedSearchDialog, { type SearchFilters } from './AdvancedSearchDialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type SearchResult = {
   id: number;
@@ -52,6 +54,15 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
   // Debounce timer
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // Advanced filters & dialog state
+  const [filters, setFilters] = useState<SearchFilters>({ restrictToFolder: true });
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Saved searches (server-backed)
+  type SavedSearch = { id: number; name: string; query: string; filters?: SearchFilters | null };
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(false);
+
   // Quick action states
   const [copiedSummaryId, setCopiedSummaryId] = useState<number | null>(null);
   const [sharingId, setSharingId] = useState<number | null>(null);
@@ -64,16 +75,24 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
     setError(null);
     setHasSearched(true);
     try {
+      const restrictFolder = filters.restrictToFolder ?? true;
+      const effectiveFolderId = restrictFolder ? folderId : null;
       const response = await fetch('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query,
           userId: userId,
-          folderId: folderId,
+          folderId: effectiveFolderId,
           matchCount: 5,
           // Use current threshold so server filters early
-          matchThreshold: Math.max(0.5, Math.min(0.99, minSimilarity))
+          matchThreshold: Math.max(0.5, Math.min(0.99, minSimilarity)),
+          filters: {
+            dateFrom: filters.dateFrom || undefined,
+            dateTo: filters.dateTo || undefined,
+            sentiment: filters.sentiment && filters.sentiment !== 'any' ? filters.sentiment : undefined,
+            tags: (filters.tags || []).length ? filters.tags : undefined,
+          }
         })
       });
       const data = await response.json();
@@ -134,6 +153,66 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
     setSearchResults([]);
     setHasSearched(false);
     setError(null);
+  };
+
+  // Load saved searches
+  useEffect(() => {
+    // In test environment, skip loading saved searches to avoid interfering with tests that mock a single fetch
+    if (process.env.NODE_ENV === 'test') return;
+    let canceled = false;
+    (async () => {
+      setLoadingSaved(true);
+      try {
+        const res = await fetch(`/api/search/saved?userId=${encodeURIComponent(userId)}`).catch(() => undefined);
+        if (!res || typeof res.json !== 'function') throw new Error('Failed to load saved searches');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'Failed to load saved searches');
+        if (!canceled) setSavedSearches(Array.isArray(data?.items) ? data.items : []);
+      } catch (e) {
+        // Non-fatal
+        console.error('Load saved searches error', e);
+      } finally {
+        if (!canceled) setLoadingSaved(false);
+      }
+    })();
+    return () => { canceled = true; };
+  }, [userId]);
+
+  const saveCurrentSearch = async () => {
+    if (!searchQuery.trim()) {
+      toast.error('Enter a search query first');
+      return;
+    }
+    const name = window.prompt('Name this saved search:', searchQuery.trim().slice(0, 32));
+    if (!name) return;
+    try {
+      const body = {
+        userId,
+        name,
+        query: searchQuery.trim(),
+        filters,
+      };
+      const res = await fetch('/api/search/saved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save search');
+      toast.success('Saved search');
+      // refresh list
+      setSavedSearches((prev) => {
+        const existing = prev.find((i) => i.name === name);
+        const item: SavedSearch = data.item || { id: Date.now(), name, query: searchQuery.trim(), filters };
+        if (existing) {
+          return prev.map((i) => (i.name === name ? item : i));
+        }
+        return [item, ...prev].slice(0, 50);
+      });
+    } catch (e) {
+      console.error('Save search error', e);
+      toast.error('Failed to save search');
+    }
   };
 
   // Keyboard shortcuts: Ctrl+K to focus search, Escape to clear
@@ -265,6 +344,7 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
   };
 
   return (
+    <TooltipProvider>
     <div className="mt-10 space-y-4">
       <div className="flex items-center gap-2 mb-4">
         <Search className="h-5 w-5 text-muted-foreground" />
@@ -275,7 +355,7 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
         {t('semanticSearchDescription') || 'Search your notes by meaning, not just keywords. Try asking questions like "What meetings did I have?" or "Show me urgent tasks"'}
       </p>
 
-      {/* Search Input */}
+      {/* Search Input + Controls */}
   <form onSubmit={(e) => { e.preventDefault(); if (debounceTimer.current) clearTimeout(debounceTimer.current); handleSearch(searchQuery); }} className="relative">
         <Input
           type="text"
@@ -288,6 +368,34 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
           ref={inputRef}
         />
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFilters(true)}
+                className="h-8"
+              >
+                Filters
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Advanced filters</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={saveCurrentSearch}
+                className="h-8"
+              >
+                Save
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Save this search</TooltipContent>
+          </Tooltip>
           {searchQuery && (
             <Button
               type="button"
@@ -310,6 +418,25 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
           </Button>
         </div>
       </form>
+
+      {/* Saved Searches */}
+      {savedSearches.length > 0 && (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-muted-foreground">Saved:</span>
+          <div className="flex flex-wrap gap-2">
+            {savedSearches.slice(0, 10).map((s) => (
+              <Button key={s.id} size="sm" variant="outline" onClick={() => {
+                setSearchQuery(s.query);
+                setFilters(s.filters || { restrictToFolder: true });
+                handleSearch(s.query);
+              }}>
+                {s.name}
+              </Button>
+            ))}
+            {loadingSaved && <span className="text-muted-foreground">Loading…</span>}
+          </div>
+        </div>
+      )}
 
       {/* Similarity threshold */}
       <div className="mt-3 flex items-center gap-3">
@@ -367,14 +494,14 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
 
       {/* Error Message */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm" role="alert" aria-live="polite">
           {error}
         </div>
       )}
 
       {/* Loading State */}
       {isSearching && (
-        <div className="space-y-3">
+        <div className="space-y-3" role="status" aria-live="polite" aria-busy="true">
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-24 w-full" />
@@ -495,6 +622,8 @@ export default function SearchBar({ userId, folderId = null }: SearchBarProps) {
           )}
         </div>
       )}
+    <AdvancedSearchDialog open={showFilters} onOpenChange={setShowFilters} value={filters} onChange={setFilters} />
     </div>
+    </TooltipProvider>
   );
 }

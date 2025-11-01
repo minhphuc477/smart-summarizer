@@ -13,13 +13,14 @@ import ReactFlow, {
   Connection,
   BackgroundVariant,
   ReactFlowProvider,
+  useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useKeyboardShortcuts, commonShortcuts } from '@/lib/useKeyboardShortcuts';
 import { Input } from '@/components/ui/input';
-import { Save, Plus, Download, FileJson, Share2, Image as ImageIcon, Sparkles, Network, Grid3x3, Circle, GitBranch } from 'lucide-react';
+import { Save, Plus, Download, FileJson, Share2, Image as ImageIcon, Sparkles, Network, Grid3x3, Circle, GitBranch, CheckSquare, Link as LinkIcon, Code2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +30,30 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { applyLayout, type LayoutType } from '@/lib/canvasLayouts';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+  CommandShortcut,
+} from '@/components/ui/command';
+
+// Import custom node components
+import ImageNode from '@/components/canvas-nodes/ImageNode';
+import ChecklistNode from '@/components/canvas-nodes/ChecklistNode';
+import LinkPreviewNode from '@/components/canvas-nodes/LinkPreviewNode';
+import CodeNode from '@/components/canvas-nodes/CodeNode';
 
 type CanvasEditorProps = {
   canvasId?: string;
@@ -60,7 +85,10 @@ type DBEdge = {
 };
 
 const nodeTypes = {
-  // Custom node types can be added here
+  image: ImageNode,
+  checklist: ChecklistNode,
+  linkPreview: LinkPreviewNode,
+  code: CodeNode,
 };
 
 function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps) {
@@ -70,9 +98,13 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
   const [saving, setSaving] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [currentCanvasId, setCurrentCanvasId] = useState(canvasId);
+  const [showMinimap, setShowMinimap] = useState(true);
+  const [commandOpen, setCommandOpen] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const undoStack = useRef<Array<{ nodes: Node[]; edges: Edge[]; title: string }>>([]);
   const redoStack = useRef<Array<{ nodes: Node[]; edges: Edge[]; title: string }>>([]);
+  const clipboardRef = useRef<Array<Node>>([]);
+  const { fitView } = useReactFlow();
 
   // Load canvas if canvasId provided
   useEffect(() => {
@@ -208,6 +240,60 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
     pushUndo();
     setNodes((nds) => [...nds, newNode]);
     toast.success('Note added');
+  };
+
+  const addImageNode = () => {
+    const newNode: Node = {
+      id: `node-${Date.now()}`,
+      type: 'image',
+      position: { x: Math.random() * 400, y: Math.random() * 400 },
+      data: { editing: true },
+    };
+    pushUndo();
+    setNodes((nds) => [...nds, newNode]);
+    toast.success('Image node added');
+  };
+
+  const addChecklistNode = () => {
+    const newNode: Node = {
+      id: `node-${Date.now()}`,
+      type: 'checklist',
+      position: { x: Math.random() * 400, y: Math.random() * 400 },
+      data: { 
+        title: 'New Checklist',
+        items: [],
+      },
+    };
+    pushUndo();
+    setNodes((nds) => [...nds, newNode]);
+    toast.success('Checklist added');
+  };
+
+  const addLinkPreviewNode = () => {
+    const newNode: Node = {
+      id: `node-${Date.now()}`,
+      type: 'linkPreview',
+      position: { x: Math.random() * 400, y: Math.random() * 400 },
+      data: { editing: true },
+    };
+    pushUndo();
+    setNodes((nds) => [...nds, newNode]);
+    toast.success('Link preview added');
+  };
+
+  const addCodeNode = () => {
+    const newNode: Node = {
+      id: `node-${Date.now()}`,
+      type: 'code',
+      position: { x: Math.random() * 400, y: Math.random() * 400 },
+      data: { 
+        code: '// Enter your code here',
+        language: 'javascript',
+      },
+    };
+    pushUndo();
+    setNodes((nds) => [...nds, newNode]);
+    toast.success('Code node added');
   };
 
   const handleAutoLayout = (layoutType: LayoutType) => {
@@ -468,7 +554,55 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
     { key: 'e', ctrl: true, description: 'Export canvas', callback: exportCanvas },
     { key: 'z', ctrl: true, description: 'Undo', callback: undo },
     { key: 'y', ctrl: true, description: 'Redo', callback: redo },
+    { key: 'k', ctrl: true, description: 'Command palette', callback: () => setCommandOpen(true) },
   ]);
+
+  // Context menu actions
+  const deleteSelected = () => {
+    const anySelected = nodes.some(n => n.selected) || edges.some(e => e.selected);
+    if (!anySelected) {
+      toast.info('No selection to delete');
+      return;
+    }
+    pushUndo();
+    setNodes(prev => prev.filter(n => !n.selected));
+    setEdges(prev => prev.filter(e => !e.selected));
+  };
+
+  const duplicateSelected = () => {
+    const selected = nodes.filter(n => n.selected);
+    if (selected.length === 0) {
+      toast.info('Select nodes to duplicate');
+      return;
+    }
+    pushUndo();
+    const dupes: Node[] = selected.map(n => ({
+      ...JSON.parse(JSON.stringify(n)),
+      id: `${n.id}-copy-${Date.now()}`,
+      position: { x: n.position.x + 40, y: n.position.y + 40 },
+    }));
+    setNodes(prev => [...prev, ...dupes]);
+  };
+
+  const copySelected = () => {
+    const selected = nodes.filter(n => n.selected);
+    clipboardRef.current = selected.map(n => JSON.parse(JSON.stringify(n)));
+    toast.success(`${selected.length} node(s) copied`);
+  };
+
+  const pasteClipboard = () => {
+    if (clipboardRef.current.length === 0) {
+      toast.info('Clipboard is empty');
+      return;
+    }
+    pushUndo();
+    const pasted = clipboardRef.current.map(n => ({
+      ...JSON.parse(JSON.stringify(n)),
+      id: `${n.id}-paste-${Date.now()}`,
+      position: { x: n.position.x + 60, y: n.position.y + 60 },
+    }));
+    setNodes(prev => [...prev, ...pasted]);
+  };
 
   return (
     <div className="h-screen flex flex-col">
@@ -481,10 +615,38 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
           placeholder="Canvas title"
         />
         <div className="flex gap-2 ml-auto">
-          <Button onClick={addStickyNote} variant="outline" size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Note
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Node
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuLabel>Node Types</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={addStickyNote}>
+                <Plus className="h-4 w-4 mr-2" />
+                Sticky Note
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={addImageNode}>
+                <ImageIcon className="h-4 w-4 mr-2" />
+                Image
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={addChecklistNode}>
+                <CheckSquare className="h-4 w-4 mr-2" />
+                Checklist
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={addLinkPreviewNode}>
+                <LinkIcon className="h-4 w-4 mr-2" />
+                Link Preview
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={addCodeNode}>
+                <Code2 className="h-4 w-4 mr-2" />
+                Code Snippet
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -570,20 +732,69 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
       </div>
 
       {/* Canvas */}
-      <div className="flex-1" ref={canvasRef}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={handleNodesChange}
-          onEdgesChange={handleEdgesChange}
-          onConnect={onConnect}
-          nodeTypes={nodeTypes}
-          fitView
-        >
-          <Controls />
-          <MiniMap />
-          <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
-        </ReactFlow>
+      <div className="flex-1">
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div className="h-full" ref={canvasRef}>
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={handleNodesChange}
+                onEdgesChange={handleEdgesChange}
+                onConnect={onConnect}
+                nodeTypes={nodeTypes}
+                fitView
+              >
+                <Controls />
+                {showMinimap && <MiniMap />}
+                <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
+              </ReactFlow>
+            </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuLabel>Add Nodes</ContextMenuLabel>
+            <ContextMenuItem onClick={addStickyNote}>
+              <Plus className="h-4 w-4 mr-2" />
+              Sticky Note
+            </ContextMenuItem>
+            <ContextMenuItem onClick={addImageNode}>
+              <ImageIcon className="h-4 w-4 mr-2" />
+              Image
+            </ContextMenuItem>
+            <ContextMenuItem onClick={addChecklistNode}>
+              <CheckSquare className="h-4 w-4 mr-2" />
+              Checklist
+            </ContextMenuItem>
+            <ContextMenuItem onClick={addLinkPreviewNode}>
+              <LinkIcon className="h-4 w-4 mr-2" />
+              Link Preview
+            </ContextMenuItem>
+            <ContextMenuItem onClick={addCodeNode}>
+              <Code2 className="h-4 w-4 mr-2" />
+              Code Snippet
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuLabel>Edit</ContextMenuLabel>
+            <ContextMenuItem onClick={deleteSelected}>Delete Selected</ContextMenuItem>
+            <ContextMenuItem onClick={duplicateSelected}>Duplicate Selected</ContextMenuItem>
+            <ContextMenuItem onClick={copySelected}>Copy</ContextMenuItem>
+            <ContextMenuItem onClick={pasteClipboard}>Paste</ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuLabel>Layout</ContextMenuLabel>
+            <ContextMenuItem onClick={() => handleAutoLayout('tree')}>Tree</ContextMenuItem>
+            <ContextMenuItem onClick={() => handleAutoLayout('force')}>Force-Directed</ContextMenuItem>
+            <ContextMenuItem onClick={() => handleAutoLayout('grid')}>Grid</ContextMenuItem>
+            <ContextMenuItem onClick={() => handleAutoLayout('hierarchical')}>Hierarchical</ContextMenuItem>
+            <ContextMenuItem onClick={() => handleAutoLayout('circular')}>Circular</ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onClick={() => fitView({ padding: 0.2 })}>Fit View</ContextMenuItem>
+            <ContextMenuItem onClick={() => setShowMinimap(v => !v)}>{showMinimap ? 'Hide' : 'Show'} Minimap</ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onClick={exportAsPNG}>Export as PNG</ContextMenuItem>
+            <ContextMenuItem onClick={exportAsSVG}>Export as SVG</ContextMenuItem>
+            <ContextMenuItem onClick={exportCanvas}>Export as JSON</ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
       </div>
 
       {/* Info Panel */}
@@ -592,6 +803,74 @@ function CanvasEditorInner({ canvasId, workspaceId, onSave }: CanvasEditorProps)
         <span>{edges.length} connections</span>
         <span className="ml-auto">Drag to create • Click to edit • Connect nodes</span>
       </div>
+
+      {/* Command Palette */}
+      <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>
+        <CommandInput placeholder="Type a command or search..." />
+        <CommandList>
+          <CommandEmpty>No results found.</CommandEmpty>
+          <CommandGroup heading="Add Nodes">
+            <CommandItem onSelect={() => { addStickyNote(); setCommandOpen(false); }}>
+              <Plus className="h-4 w-4 mr-2" />
+              Sticky Note
+            </CommandItem>
+            <CommandItem onSelect={() => { addImageNode(); setCommandOpen(false); }}>
+              <ImageIcon className="h-4 w-4 mr-2" />
+              Image
+            </CommandItem>
+            <CommandItem onSelect={() => { addChecklistNode(); setCommandOpen(false); }}>
+              <CheckSquare className="h-4 w-4 mr-2" />
+              Checklist
+            </CommandItem>
+            <CommandItem onSelect={() => { addLinkPreviewNode(); setCommandOpen(false); }}>
+              <LinkIcon className="h-4 w-4 mr-2" />
+              Link Preview
+            </CommandItem>
+            <CommandItem onSelect={() => { addCodeNode(); setCommandOpen(false); }}>
+              <Code2 className="h-4 w-4 mr-2" />
+              Code Snippet
+            </CommandItem>
+          </CommandGroup>
+          <CommandSeparator />
+          <CommandGroup heading="Canvas">
+            <CommandItem onSelect={() => { fitView({ padding: 0.2 }); setCommandOpen(false); }}>
+              Fit View
+            </CommandItem>
+            <CommandItem onSelect={() => { setShowMinimap(v => !v); setCommandOpen(false); }}>
+              {showMinimap ? 'Hide' : 'Show'} Minimap
+            </CommandItem>
+          </CommandGroup>
+          <CommandSeparator />
+          <CommandGroup heading="Layout">
+            <CommandItem onSelect={() => { handleAutoLayout('tree'); setCommandOpen(false); }}>Tree</CommandItem>
+            <CommandItem onSelect={() => { handleAutoLayout('force'); setCommandOpen(false); }}>Force-Directed</CommandItem>
+            <CommandItem onSelect={() => { handleAutoLayout('grid'); setCommandOpen(false); }}>Grid</CommandItem>
+            <CommandItem onSelect={() => { handleAutoLayout('hierarchical'); setCommandOpen(false); }}>Hierarchical</CommandItem>
+            <CommandItem onSelect={() => { handleAutoLayout('circular'); setCommandOpen(false); }}>Circular</CommandItem>
+          </CommandGroup>
+          <CommandSeparator />
+          <CommandGroup heading="Export">
+            <CommandItem onSelect={() => { exportAsPNG(); setCommandOpen(false); }}>Export as PNG</CommandItem>
+            <CommandItem onSelect={() => { exportAsSVG(); setCommandOpen(false); }}>Export as SVG</CommandItem>
+            <CommandItem onSelect={() => { exportCanvas(); setCommandOpen(false); }}>Export as JSON</CommandItem>
+          </CommandGroup>
+          <CommandSeparator />
+          <CommandGroup heading="Edit">
+            <CommandItem onSelect={() => { undo(); setCommandOpen(false); }}>Undo</CommandItem>
+            <CommandItem onSelect={() => { redo(); setCommandOpen(false); }}>Redo</CommandItem>
+            <CommandItem onSelect={() => { copySelected(); setCommandOpen(false); }}>Copy</CommandItem>
+            <CommandItem onSelect={() => { pasteClipboard(); setCommandOpen(false); }}>Paste</CommandItem>
+            <CommandItem onSelect={() => { duplicateSelected(); setCommandOpen(false); }}>Duplicate</CommandItem>
+            <CommandItem onSelect={() => { deleteSelected(); setCommandOpen(false); }}>Delete Selected</CommandItem>
+          </CommandGroup>
+          <CommandSeparator />
+          <CommandGroup heading="AI">
+            <CommandItem onSelect={() => { getAISuggestions(); setCommandOpen(false); }}>
+              AI Suggest
+            </CommandItem>
+          </CommandGroup>
+        </CommandList>
+      </CommandDialog>
     </div>
   );
 }

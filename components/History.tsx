@@ -78,6 +78,7 @@ import { FileQuestion } from 'lucide-react';
 import { toast } from 'sonner';
 import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts';
 import { generateCalendarLinks, downloadICS } from '@/lib/calendarLinks';
+import dynamic from 'next/dynamic';
 import { useSpeech } from '@/lib/useSpeech';
 
 type HistoryProps = {
@@ -86,6 +87,13 @@ type HistoryProps = {
   userId?: string;
   supabaseClient?: SupabaseClient;
 };
+
+// Dynamically import RelatedNotesWidget to avoid impacting tests/SSR
+const RelatedNotesWidget = dynamic(() => import('./RelatedNotesWidget'), { ssr: false });
+
+function RelatedNotesWidgetWrapper({ noteId }: { noteId: number }) {
+  return <RelatedNotesWidget noteId={noteId} />;
+}
 
 function History({ isGuest = false, selectedFolderId = null, userId, supabaseClient }: HistoryProps) {
   const supabase = supabaseClient ?? defaultSupabase;
@@ -144,6 +152,7 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
   const [tagNoteId, setTagNoteId] = useState<number | null>(null);
   const [newTagInput, setNewTagInput] = useState('');
   const [tagSuggestions, setTagSuggestions] = useState<{ id: number; name: string }[]>([]);
+  const [showRelated, setShowRelated] = useState(false);
   
   // Bulk selection state
   const [selectedNoteIds, setSelectedNoteIds] = useState<Set<number>>(new Set());
@@ -406,7 +415,7 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
         
         try {
           guestMode.deleteGuestNote(id as string);
-        } catch (e) {
+        } catch (_e) {
           // Revert on error
           setGuestNotes(originalNotes);
           toast.error('Failed to delete note');
@@ -428,7 +437,7 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
             setNotes(originalNotes);
             toast.error('Failed to delete note');
           }
-        } catch (e) {
+        } catch (_e) {
           // Revert on error
           setNotes(originalNotes);
           toast.error('Failed to delete note');
@@ -747,6 +756,51 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
       toast.success('Tag synced');
     } catch (e) {
       console.error('Add tag error:', e);
+      setNotes(originalNotes);
+      toast.error('Failed to add tag');
+    }
+  };
+
+  // Add tag to note by explicit name (used for recommended tags)
+  const handleAddTagByName = async (noteId: number, name: string) => {
+    const tagName = name.trim();
+    if (!tagName) return;
+
+    // Optimistic update
+    const tempId = -Date.now();
+    const originalNotes = notes;
+    setNotes(prev => prev.map(n => {
+      if (n.id === noteId) {
+        const existing = n.note_tags || [];
+        // Avoid duplicate chip visually if it already exists
+        const exists = existing.some(nt => (nt.tags?.name || '').toLowerCase() === tagName.toLowerCase());
+        return exists ? n : {
+          ...n,
+          note_tags: [...existing, { tags: { id: tempId as unknown as number, name: tagName } }]
+        };
+      }
+      return n;
+    }));
+
+    toast.success('Tag added');
+
+    try {
+      const res = await fetch(`/api/notes/${noteId}/tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tagName }),
+      });
+
+      if (!res.ok) {
+        setNotes(originalNotes);
+        toast.error('Failed to add tag');
+        return;
+      }
+
+      await refreshOneNote(noteId);
+      toast.success('Tag synced');
+    } catch (_e) {
+      console.error('Add tag (recommended) error');
       setNotes(originalNotes);
       toast.error('Failed to add tag');
     }
@@ -1984,6 +2038,19 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
                 placeholder="Action 1&#10;Action 2&#10;..."
               />
             </div>
+            {/* Related Notes (Phase 4) */}
+            <div className="border-t pt-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Discover Related Notes</label>
+                <Button variant="ghost" size="sm" onClick={() => setShowRelated(v => !v)} aria-label="Toggle related notes">
+                  {showRelated ? 'Hide' : 'Show'}
+                </Button>
+              </div>
+              {showRelated && editNoteId !== null && (
+                // Lazy import to avoid SSR issues
+                <RelatedNotesWidgetWrapper noteId={editNoteId} />
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditNoteId(null)}>
@@ -2006,6 +2073,14 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            {/* Suggested Tags (from similar notes) */}
+            {tagNoteId && (
+              <SuggestedTagsSection
+                noteId={tagNoteId}
+                existing={(notes.find(n => n.id === tagNoteId)?.note_tags || []).map(nt => nt.tags?.name || '')}
+                onPick={(name) => handleAddTagByName(tagNoteId, name)}
+              />
+            )}
             {/* Existing tags */}
             {tagNoteId && notes.find(n => n.id === tagNoteId)?.note_tags && (
               <div>
@@ -2127,6 +2202,87 @@ function History({ isGuest = false, selectedFolderId = null, userId, supabaseCli
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function SuggestedTagsSection({
+  noteId,
+  existing,
+  onPick,
+}: {
+  noteId: number;
+  existing: string[];
+  onPick: (name: string) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<{ name: string; score: number }[]>([]);
+
+  useEffect(() => {
+    let canceled = false;
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/notes/${noteId}/suggested-tags?limit=6`);
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to load suggested tags');
+        }
+        const data = await res.json();
+        if (canceled) return;
+        const list = (data.suggestions || []) as Array<{ name: string; score: number }>;
+        // Filter out any tag already on the note (case-insensitive)
+        const existingSet = new Set(existing.map((e) => e.toLowerCase()));
+        setSuggestions(list.filter(s => !existingSet.has((s.name || '').toLowerCase())));
+      } catch (_e) {
+        if (canceled) return;
+        setError('Could not fetch suggestions');
+      } finally {
+        if (!canceled) setLoading(false);
+      }
+    };
+    run();
+    return () => { canceled = true; };
+  }, [noteId, existing]);
+
+  if (loading) {
+    return (
+      <div>
+        <label className="text-sm font-medium">Suggested Tags</label>
+        <div className="mt-2 text-xs text-muted-foreground">Loading suggestions…</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div>
+        <label className="text-sm font-medium">Suggested Tags</label>
+        <div className="mt-2 text-xs text-destructive">{error}</div>
+      </div>
+    );
+  }
+
+  if (!suggestions.length) return null;
+
+  return (
+    <div>
+      <label className="text-sm font-medium">Suggested Tags</label>
+      <div className="flex flex-wrap gap-2 mt-2">
+        {suggestions.map((s) => (
+          <Button
+            key={s.name}
+            variant="secondary"
+            size="sm"
+            onClick={() => onPick(s.name)}
+            aria-label={`Add tag ${s.name}`}
+          >
+            + {s.name}
+          </Button>
+        ))}
+      </div>
     </div>
   );
 }

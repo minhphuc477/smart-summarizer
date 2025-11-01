@@ -38,6 +38,7 @@ jest.mock('reactflow', () => {
     ReactFlowProvider,
     useNodesState,
     useEdgesState,
+    useReactFlow: () => ({ fitView: jest.fn() }),
     addEdge: (conn: any, eds: any[]) => [...eds, { id: 'e1', ...conn }],
     BackgroundVariant: { Dots: 'dots' },
   };
